@@ -34,18 +34,18 @@ Hot reload is **not** available inside the distroless Docker images. Iterate wit
 
 ## Commands we actually run
 
-| Task | Command |
-| ---- | ------- |
-| Install | `bun install` |
-| Prisma client | `bun run db:generate` |
+| Task                         | Command                                            |
+| ---------------------------- | -------------------------------------------------- |
+| Install                      | `bun install`                                      |
+| Prisma client                | `bun run db:generate`                              |
 | Dev API / worker / scheduler | `bun run dev:api` / `dev:worker` / `dev:scheduler` |
-| Lint | `bun run lint` (`bun run lint:fix` to apply) |
-| Format | `bun run format` / `bun run format:check` |
-| Typecheck | `bun run typecheck` |
-| Tests (Vitest) | `bun run test` or `make test` |
-| Coverage | `bun run test:coverage` |
-| Seed example pipelines | `bun run db:seed` |
-| Full Docker stack | `make up` / `make down` / `make logs` |
+| Lint                         | `bun run lint` (`bun run lint:fix` to apply)       |
+| Format                       | `bun run format` / `bun run format:check`          |
+| Typecheck                    | `bun run typecheck`                                |
+| Tests (Vitest)               | `bun run test` or `make test`                      |
+| Coverage                     | `bun run test:coverage`                            |
+| Seed example pipelines       | `bun run db:seed`                                  |
+| Full Docker stack            | `make up` / `make down` / `make logs`              |
 
 CI on pull requests to `main` runs lint, Prettier check, typecheck, and `bun run test:coverage` (see `.github/workflows/ci.yml`).
 
