@@ -1,0 +1,61 @@
+name: Bug report
+description: Something in the CAPS API, worker, or scheduler is broken
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for the **backend**. For the DHIS2 app, open the issue on [hisptz/caps-app](https://github.com/hisptz/caps-app).
+        Security issues: [SECURITY.md](https://github.com/hisptz/caps-engine/blob/main/SECURITY.md) — do not use this form.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Expected vs actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. make up / bun run dev:api
+        2. Trigger pipeline X
+        3. Observe …
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - API
+        - Worker
+        - Scheduler
+        - Prisma / migrations
+        - Docker / Compose
+        - Unsure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Git tag, GHCR image tag, or commit SHA.
+      placeholder: e.g. 1.23.1 or sha-…
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Bun version, Docker version. Do not paste secrets.
+      placeholder: |
+        Bun:
+        Docker:
+        Postgres:
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Redact passwords, tokens, and hostnames you cannot share.
+      render: text

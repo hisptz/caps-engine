@@ -1,0 +1,17 @@
+node_modules
+dist
+.build
+coverage
+tests
+.env*
+*.log
+.DS_Store
+.git
+.github
+.eslintcache
+*.tsbuildinfo
+prisma/generated
+.climate-data
+.dhis
+outputs
+logs

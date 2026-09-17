@@ -1,0 +1,33 @@
+// ============================================================
+// SCHEDULING CLUSTER
+// Defines when pipelines should fire automatically
+// ============================================================
+
+model PipelineSchedule {
+  id          String  @id @default(uuid()) @db.Uuid
+  pipelineId  String  @db.Uuid
+  name        String
+  description String?
+
+  status ScheduleStatus @default(ACTIVE)
+
+  // Standard 5-part cron expression e.g. "0 6 * * *"
+  cronExpr String
+
+  // Static context merged into every execution this schedule fires
+  inputContext Json @default("{}")
+
+  // Populated by the scheduler after each trigger
+  lastRunAt DateTime?
+  nextRunAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pipeline   Pipeline            @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  executions PipelineExecution[]
+
+  @@index([status, nextRunAt])
+  @@index([pipelineId])
+  @@map("pipeline_schedules")
+}

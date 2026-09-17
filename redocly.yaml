@@ -1,0 +1,13 @@
+apis:
+  chap:
+    root: ./resources/chap.openapi.json
+    x-openapi-ts:
+      output: ./types/chap.d.ts
+  dhis:
+    root: ./resources/dhis.openapi.json
+    x-openapi-ts:
+      output: ./types/dhis.d.ts
+  climateApi:
+    root: ./resources/open-climate-service.openapi.json
+    x-openapi-ts:
+      output: ./types/climateApi.d.ts

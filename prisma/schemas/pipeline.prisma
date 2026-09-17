@@ -1,0 +1,55 @@
+// ============================================================
+// DEFINITION CLUSTER
+// Blueprints — never mutated during execution
+// ============================================================
+
+model Pipeline {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  description String?
+  config      Json     @default("{}")
+  isActive    Boolean  @default(true)
+
+  concurrencyPolicy ConcurrencyPolicy @default(SKIP)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  steps      PipelineStep[]
+  executions PipelineExecution[]
+  schedules  PipelineSchedule[]
+
+  @@map("pipelines")
+}
+
+model PipelineStep {
+  id          String  @id @default(uuid()) @db.Uuid
+  pipelineId  String  @db.Uuid
+  name        String
+  description String?
+
+  // Maps to a registered handler in your worker code
+  handlerKey String
+
+  // Execution order within the pipeline (0-indexed)
+  stepOrder Int
+
+  // Retry configuration
+  maxRetries   Int @default(3)
+  retryDelayMs Int @default(1000)
+
+  // Optional JSON schema for validating input from previous step
+  inputSchema Json?
+
+  // Optional static config passed to the handler on every run
+  handlerConfig Json @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pipeline   Pipeline        @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  executions StepExecution[]
+
+  @@unique([pipelineId, stepOrder])
+  @@map("pipeline_steps")
+}

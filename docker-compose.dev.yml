@@ -1,0 +1,187 @@
+services:
+  climate-api:
+    image: ghcr.io/hisptz/south-sudan-climate-service:latest
+    platform: linux/amd64
+    volumes:
+      - ./.climate-data:/app/data
+    ports:
+      - "8001:8000"
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: caps
+      POSTGRES_PASSWORD: caps
+      POSTGRES_DB: caps
+    volumes:
+      - caps-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U caps -d caps"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    ports:
+      - "5432:5432"
+  # ─── RabbitMQ ─────────────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: caps
+      RABBITMQ_DEFAULT_PASS: caps
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+  # ─── DHIS2 database ───────────────────────────────────────────────────────
+  dhis2-db:
+    image: postgis/postgis:16-3.5-alpine
+    platform: linux/amd64
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: district
+      POSTGRES_DB: dhis
+    volumes:
+      - dhis2_postgres_data:/var/lib/postgresql/data
+      - ./.dhis/db/init-dhis2-db.sh:/docker-entrypoint-initdb.d/init-dhis2-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d dhis"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  # ─── DHIS2 2.43 ───────────────────────────────────────────────────────────
+  dhis2:
+    image: dhis2/core:2.43.0
+    depends_on:
+      dhis2-db:
+        condition: service_healthy
+    environment:
+      DHIS2_HOME: /opt/dhis2
+      JAVA_OPTS: >-
+        -Xmx2g
+        -Xms1g
+        -Dlog4j2.formatMsgNoLookups=true
+    volumes:
+      - ./.dhis/config/dhis.conf:/opt/dhis2/dhis.conf:ro
+      - dhis2_app_data:/opt/dhis2
+    ports:
+      - "8080:8080"
+  # ─── CHAP ─────────────────────────────────────────────────────────────────
+  chap:
+    image: ghcr.io/dhis2-chap/chap-core:latest
+    platform: linux/amd64
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CHAP_DATABASE_URL: postgresql://chap:chap@postgres:5432/chap
+      CELERY_BROKER: redis://redis:6379/0
+      CHAP_LOGS_DIR: /data/logs
+      CHAP_RUNS_DIR: /data/runs
+    container_name: chap
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: chap:chap
+    volumes:
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 2000000000 # 2GB for runtime temp files (API service)
+      - type: volume
+        source: logs
+        target: /data/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_started
+      chap-worker:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+  chap-worker:
+    depends_on:
+      postgres:
+        condition: service_healthy
+    image: ghcr.io/dhis2-chap/chap-worker:latest
+    platform: linux/amd64
+    environment:
+      IS_IN_DOCKER: 1
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CHAP_DATABASE_URL: postgresql://chap:chap@postgres:5432/chap
+      CELERY_BROKER: redis://redis:6379
+      RENV_PATHS_ROOT: /data/renv
+      UV_CACHE_DIR: /data/uv
+      CHAP_LOGS_DIR: /data/logs
+      CHAP_RUNS_DIR: /data/runs
+      PYTENSOR_FLAGS: "base_compiledir=/data/pytensor"
+    command: "/app/.venv/bin/celery -A chap_core.rest_api.celery_tasks worker --loglevel=info"
+    working_dir: /app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: chap:chap
+    volumes:
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 2000000000 # 2GB for runtime temp files (model execution)
+      - type: volume
+        source: runs
+        target: /data/runs
+      - type: volume
+        source: renv
+        target: /data/renv
+      - type: volume
+        source: uv
+        target: /data/uv
+      - type: volume
+        source: logs
+        target: /data/logs
+      - type: volume
+        source: pytensor
+        target: /data/pytensor
+  redis:
+    image: valkey/valkey:8
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: chap
+      POSTGRES_PASSWORD: chap
+      POSTGRES_DB: chap
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chap -d chap"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    volumes:
+      - chap-db:/var/lib/postgresql/data
+    expose:
+      - "5432"
+
+volumes:
+  chap-db:
+  caps-data:
+  bun-cache:
+  rabbitmq_data:
+  dhis2_postgres_data:
+  dhis2_app_data:
+  chap_data:
+  logs:
+  renv:
+  uv:
+  pytensor:
+  runs:
+  climate_data:

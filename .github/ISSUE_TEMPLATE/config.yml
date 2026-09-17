@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/hisptz/caps-engine/security/advisories/new
+    about: Privately report a security issue. Do not file a public bug.
+  - name: CAPS DHIS2 app
+    url: https://github.com/hisptz/caps-app/issues
+    about: UI, DHIS2 Route setup, and operator-console bugs belong in caps-app.
+  - name: HISP Tanzania
+    url: https://github.com/hisptz
+    about: Maintainer organisation. Email info@hisptanzania.org.

@@ -1,0 +1,3683 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FastAPI",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Read Index",
+        "description": "Return openEO capabilities (JSON) or the landing page (HTML).",
+        "operationId": "read_index__get",
+        "responses": {
+          "200": {
+            "description": "Landing page (HTML) or navigation document (JSON)",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$defs": {
+                    "Link": {
+                      "properties": {
+                        "href": {
+                          "type": "string",
+                          "title": "Href"
+                        },
+                        "rel": {
+                          "type": "string",
+                          "title": "Rel"
+                        },
+                        "title": {
+                          "type": "string",
+                          "title": "Title"
+                        }
+                      },
+                      "type": "object",
+                      "required": ["href", "rel", "title"],
+                      "title": "Link",
+                      "description": "Hypermedia link."
+                    }
+                  },
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "title": "Message"
+                    },
+                    "links": {
+                      "items": {
+                        "schema": {
+                          "Link": {
+                            "properties": {
+                              "href": {
+                                "type": "string",
+                                "title": "Href"
+                              },
+                              "rel": {
+                                "type": "string",
+                                "title": "Rel"
+                              },
+                              "title": {
+                                "type": "string",
+                                "title": "Title"
+                              }
+                            },
+                            "type": "object",
+                            "required": ["href", "rel", "title"],
+                            "title": "Link",
+                            "description": "Hypermedia link."
+                          }
+                        }
+                      },
+                      "type": "array",
+                      "title": "Links"
+                    }
+                  },
+                  "type": "object",
+                  "required": ["message", "links"],
+                  "title": "RootResponse",
+                  "description": "Root endpoint response with navigation links."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Health",
+        "description": "Return health status for container health checks.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/info": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Info",
+        "description": "Return application version and environment info.",
+        "operationId": "info_info_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/openeo": {
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Well Known Openeo",
+        "description": "OpenEO service discovery — lets clients find the versioned API URL.",
+        "operationId": "well_known_openeo__well_known_openeo_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Well Known Openeo  Well Known Openeo Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/credentials/oidc": {
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Credentials Oidc",
+        "description": "Return OIDC authentication providers (empty = open/anonymous access).",
+        "operationId": "credentials_oidc_credentials_oidc_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Credentials Oidc Credentials Oidc Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/file_formats": {
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "File Formats",
+        "description": "Return supported input and output file formats.",
+        "operationId": "file_formats_file_formats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response File Formats File Formats Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/service_types": {
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Service Types",
+        "description": "Return supported secondary web service types (none currently).",
+        "operationId": "service_types_service_types_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Service Types Service Types Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me": {
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Me",
+        "description": "Return basic account info for this open/anonymous backend.",
+        "operationId": "me_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Me Me Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stac": {
+      "get": {
+        "tags": ["STAC"],
+        "summary": "Get Stac Landing",
+        "description": "Return the STAC catalog landing page.",
+        "operationId": "get_stac_landing_stac_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StacCatalogResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stac/catalog.json": {
+      "get": {
+        "tags": ["STAC"],
+        "summary": "Get Stac Catalog Json",
+        "description": "Return the STAC catalog landing page (catalog.json alias).",
+        "operationId": "get_stac_catalog_json_stac_catalog_json_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StacCatalogResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stac/collections/{dataset_id}": {
+      "get": {
+        "tags": ["STAC"],
+        "summary": "Get Stac Collection",
+        "description": "Return one STAC collection document.",
+        "operationId": "get_stac_collection_stac_collections__dataset_id__get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Stac Collection Stac Collections  Dataset Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections": {
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "List Collections",
+        "description": "Return all published collections (openEO + STAC compatible).",
+        "operationId": "list_collections_collections_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response List Collections Collections Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{collection_id}": {
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Get Collection",
+        "description": "Return one published collection.",
+        "operationId": "get_collection_collections__collection_id__get",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Collection Collections  Collection Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs": {
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "List Jobs",
+        "description": "Return all openEO jobs.",
+        "operationId": "list_jobs_jobs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenEOJobListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Create Job",
+        "description": "Create a new openEO job.",
+        "operationId": "create_job_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenEOJobCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenEOJobRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}": {
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Get Job",
+        "description": "Return one openEO job.",
+        "operationId": "get_job_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenEOJobRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Update Job",
+        "description": "Update job metadata (title, description, process, etc.).",
+        "operationId": "update_job_jobs__job_id__patch",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenEOJobUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Delete Job",
+        "description": "Delete a job and its results.",
+        "operationId": "delete_job_jobs__job_id__delete",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/results": {
+      "post": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Start Job",
+        "description": "Queue a job for processing.",
+        "operationId": "start_job_jobs__job_id__results_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Get Results",
+        "description": "Return result links for a finished job.",
+        "operationId": "get_results_jobs__job_id__results_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenEOJobResults"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Cancel Job",
+        "description": "Cancel a running or queued job.",
+        "operationId": "cancel_job_jobs__job_id__results_delete",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/results/result.geojson": {
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Download Geojson Result",
+        "description": "Serve the GeoJSON result file for a finished batch job.",
+        "operationId": "download_geojson_result_jobs__job_id__results_result_geojson_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/results/result.zarr/{zarr_path}": {
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Download Zarr Chunk",
+        "description": "Serve one file from within the Zarr result store (chunk or metadata).",
+        "operationId": "download_zarr_chunk_jobs__job_id__results_result_zarr__zarr_path__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "zarr_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Zarr Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/results/{filename}": {
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Download Result File",
+        "description": "Serve a result file (NetCDF, GeoTIFF, PNG, CSV, GeoParquet) for a finished batch job.",
+        "operationId": "download_result_file_jobs__job_id__results__filename__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Filename"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/process_graphs": {
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "List Workflows",
+        "description": "Return all stored workflows (user-defined processes).",
+        "operationId": "list_workflows_process_graphs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/process_graphs/{process_graph_id}": {
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Get Workflow",
+        "description": "Return one workflow (user-defined process).",
+        "operationId": "get_workflow_process_graphs__process_graph_id__get",
+        "parameters": [
+          {
+            "name": "process_graph_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Process Graph Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Put Workflow",
+        "description": "Store or replace a workflow (user-defined process).",
+        "operationId": "put_workflow_process_graphs__process_graph_id__put",
+        "parameters": [
+          {
+            "name": "process_graph_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Process Graph Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Delete Workflow",
+        "description": "Delete a workflow (user-defined process).",
+        "operationId": "delete_workflow_process_graphs__process_graph_id__delete",
+        "parameters": [
+          {
+            "name": "process_graph_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Process Graph Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/result": {
+      "post": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Execute Synchronous",
+        "description": "Execute a process graph synchronously and return the result.\n\nReturns JSON for scalar/dict results, or an exported file for\nsynchronously-supported non-Zarr raster/vector formats.",
+        "operationId": "execute_synchronous_result_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Execute Synchronous Result Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/extent": {
+      "get": {
+        "tags": ["Extent"],
+        "summary": "Get Extent",
+        "description": "Return the configured extent for this Open Climate Service instance.",
+        "operationId": "get_extent_extent_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtentRecord"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dataset-templates/": {
+      "get": {
+        "tags": ["Dataset templates"],
+        "summary": "List Dataset Templates",
+        "description": "Return the available dataset templates from the registry.",
+        "operationId": "list_dataset_templates_dataset_templates__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response List Dataset Templates Dataset Templates  Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dataset-templates/{dataset_id}": {
+      "get": {
+        "tags": ["Dataset templates"],
+        "summary": "Get Dataset Template",
+        "description": "Get a single dataset template by ID with derived coverage metadata.",
+        "operationId": "get_dataset_template_dataset_templates__dataset_id__get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Dataset Template Dataset Templates  Dataset Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/datasets": {
+      "get": {
+        "tags": ["Datasets"],
+        "summary": "List Datasets",
+        "description": "List managed datasets.",
+        "operationId": "list_datasets_datasets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/datasets/{dataset_id}": {
+      "get": {
+        "tags": ["Datasets"],
+        "summary": "Get Dataset",
+        "description": "Get managed dataset metadata and available versions.",
+        "operationId": "get_dataset_datasets__dataset_id__get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetDetailRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/datasets/{dataset_id}/download": {
+      "get": {
+        "tags": ["Datasets"],
+        "summary": "Download Artifact File",
+        "description": "Download the primary saved file for a dataset when available.",
+        "operationId": "download_artifact_file_datasets__dataset_id__download_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingestions/jobs/{job_id}": {
+      "get": {
+        "tags": ["Ingestions"],
+        "summary": "Get Ingestion Job",
+        "description": "Return the status of an async ingestion or sync job.",
+        "operationId": "get_ingestion_job_ingestions_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Ingestions"],
+        "summary": "Cancel Ingestion Job",
+        "description": "Request cooperative cancellation for an async ingestion or sync job.",
+        "operationId": "cancel_ingestion_job_ingestions_jobs__job_id__delete",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingestions": {
+      "post": {
+        "tags": ["Ingestions"],
+        "summary": "Create Ingestion",
+        "description": "Create or update a managed dataset from a dataset template and configured extent.\n\nPass ``Prefer: respond-async`` to queue the ingestion as a background job and\nreturn immediately with 202 + ``Location: /ingestions/jobs/{id}``.",
+        "operationId": "create_ingestion_ingestions_post",
+        "parameters": [
+          {
+            "name": "prefer",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prefer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIngestionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Ingestions"],
+        "summary": "List Ingestions",
+        "description": "List ingestion run records for operational and admin use.",
+        "operationId": "list_ingestions_ingestions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingestions/{ingestion_id}": {
+      "get": {
+        "tags": ["Ingestions"],
+        "summary": "Get Ingestion",
+        "description": "Return the managed dataset view created for a given ingestion.",
+        "operationId": "get_ingestion_ingestions__ingestion_id__get",
+        "parameters": [
+          {
+            "name": "ingestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ingestion Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/zarr/{dataset_id}/{relative_path}": {
+      "get": {
+        "tags": ["Zarr"],
+        "summary": "Get Canonical Zarr Store File",
+        "description": "Serve canonical Zarr store content for a managed dataset.",
+        "operationId": "get_canonical_zarr_store_file_zarr__dataset_id___relative_path__get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "relative_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Relative Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "tags": ["Zarr"],
+        "summary": "Get Canonical Zarr Store File",
+        "description": "Serve canonical Zarr store content for a managed dataset.",
+        "operationId": "get_canonical_zarr_store_file_zarr__dataset_id___relative_path__get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "relative_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Relative Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/icechunk/{dataset_id}/{file_path}": {
+      "get": {
+        "tags": ["Icechunk"],
+        "summary": "Serve Icechunk Store File",
+        "description": "Serve a raw Icechunk store file for native SDK access.\n\nEnables clients to open the store directly with::\n\n    import icechunk, zarr\n\n    repo = icechunk.Repository.open(icechunk.http_storage(\"http://<host>/icechunk/<dataset_id>/\"))\n    ds = zarr.open(repo.readonly_session(\"main\").store, zarr_format=3)",
+        "operationId": "serve_icechunk_store_file_icechunk__dataset_id___file_path__get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "file_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "tags": ["Icechunk"],
+        "summary": "Serve Icechunk Store File",
+        "description": "Serve a raw Icechunk store file for native SDK access.\n\nEnables clients to open the store directly with::\n\n    import icechunk, zarr\n\n    repo = icechunk.Repository.open(icechunk.http_storage(\"http://<host>/icechunk/<dataset_id>/\"))\n    ds = zarr.open(repo.readonly_session(\"main\").store, zarr_format=3)",
+        "operationId": "serve_icechunk_store_file_icechunk__dataset_id___file_path__get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "file_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sync/{dataset_id}": {
+      "post": {
+        "tags": ["Sync"],
+        "summary": "Sync Dataset",
+        "description": "Sync a managed dataset forward from its latest available time step.\n\nPass ``Prefer: respond-async`` to queue the sync as a background job and\nreturn immediately with 202 + ``Location: /ingestions/jobs/{id}``.",
+        "operationId": "sync_dataset_sync__dataset_id__post",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "prefer",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prefer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncDatasetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sync/{dataset_id}/plan": {
+      "get": {
+        "tags": ["Sync"],
+        "summary": "Plan Sync Dataset",
+        "description": "Return the sync plan for a managed dataset without starting a download.",
+        "operationId": "plan_sync_dataset_sync__dataset_id__plan_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/schedules": {
+      "get": {
+        "tags": ["Schedules"],
+        "summary": "List Schedules",
+        "description": "Return configured schedules with process-local runtime status.",
+        "operationId": "list_schedules_schedules_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/processes": {
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "List Processes",
+        "description": "Return all available openEO processes.",
+        "operationId": "list_processes_processes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response List Processes Processes Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/processes/{process_id}": {
+      "get": {
+        "tags": ["openEO", "openEO"],
+        "summary": "Get Process Spec",
+        "description": "Return one openEO process description by id.",
+        "operationId": "get_process_spec_processes__process_id__get",
+        "parameters": [
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Process Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Process Spec Processes  Process Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AppInfo": {
+        "properties": {
+          "app_version": {
+            "type": "string",
+            "title": "App Version"
+          },
+          "python_version": {
+            "type": "string",
+            "title": "Python Version"
+          },
+          "uvicorn_version": {
+            "type": "string",
+            "title": "Uvicorn Version"
+          },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": ["app_version", "python_version", "uvicorn_version"],
+        "title": "AppInfo",
+        "description": "Application version and environment info."
+      },
+      "ArtifactCoverage": {
+        "properties": {
+          "spatial": {
+            "$ref": "#/components/schemas/CoverageSpatial",
+            "description": "Covered spatial extent of the managed dataset."
+          },
+          "spatial_wgs84": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoverageSpatial"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Spatial extent in WGS84. None for WGS84 instances or legacy records."
+          },
+          "temporal": {
+            "$ref": "#/components/schemas/CoverageTemporal",
+            "description": "Covered temporal extent of the managed dataset."
+          }
+        },
+        "type": "object",
+        "required": ["spatial", "temporal"],
+        "title": "ArtifactCoverage",
+        "description": "Artifact coverage metadata."
+      },
+      "ArtifactFormat": {
+        "type": "string",
+        "enum": ["zarr", "netcdf", "icechunk"],
+        "title": "ArtifactFormat",
+        "description": "Supported stored artifact formats."
+      },
+      "ArtifactRequestScope": {
+        "properties": {
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start",
+            "description": "Requested start period (None for a non-temporal dataset, e.g. a climatology)."
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End",
+            "description": "Requested end period for the ingestion or sync operation."
+          },
+          "bbox": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox",
+            "description": "Requested bounding box when the artifact was created."
+          }
+        },
+        "type": "object",
+        "title": "ArtifactRequestScope",
+        "description": "Original request parameters used to create an artifact."
+      },
+      "CheckOutcome": {
+        "type": "string",
+        "enum": ["submitted", "not_materialized", "already_running", "read_only", "error"],
+        "title": "CheckOutcome",
+        "description": "Outcome of one scheduled dataset check."
+      },
+      "CoverageSpatial": {
+        "properties": {
+          "xmin": {
+            "type": "number",
+            "title": "Xmin",
+            "description": "Minimum longitude of the covered spatial extent."
+          },
+          "ymin": {
+            "type": "number",
+            "title": "Ymin",
+            "description": "Minimum latitude of the covered spatial extent."
+          },
+          "xmax": {
+            "type": "number",
+            "title": "Xmax",
+            "description": "Maximum longitude of the covered spatial extent."
+          },
+          "ymax": {
+            "type": "number",
+            "title": "Ymax",
+            "description": "Maximum latitude of the covered spatial extent."
+          }
+        },
+        "type": "object",
+        "required": ["xmin", "ymin", "xmax", "ymax"],
+        "title": "CoverageSpatial",
+        "description": "Spatial extent summary."
+      },
+      "CoverageTemporal": {
+        "properties": {
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start",
+            "description": "First covered time period in dataset-native string form."
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End",
+            "description": "Last covered time period in dataset-native string form."
+          }
+        },
+        "type": "object",
+        "title": "CoverageTemporal",
+        "description": "Temporal extent summary.\n\n``start``/``end`` are ``None`` for a non-temporal (ordinal) dataset such as a\nday-of-year climatology, which has no datetime extent."
+      },
+      "CreateIngestionRequest": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id",
+            "description": "Source dataset template id from the Open Climate Service registry."
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start",
+            "description": "Start period to ingest. Required for historical datasets. May be omitted for a dataset declaring 'temporal_direction: future' (e.g. a forecast), where it means 'from now' — a fixed date would be stale by the next day."
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End",
+            "description": "Optional end period to ingest."
+          },
+          "overwrite": {
+            "type": "boolean",
+            "title": "Overwrite",
+            "description": "Whether to force regeneration of an existing matching artifact.",
+            "default": false
+          },
+          "publish": {
+            "type": "boolean",
+            "title": "Publish",
+            "description": "Whether to publish the resulting dataset.",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": ["dataset_id"],
+        "title": "CreateIngestionRequest",
+        "description": "Request payload for creating or updating a managed dataset."
+      },
+      "DatasetAccessLink": {
+        "properties": {
+          "href": {
+            "type": "string",
+            "title": "Href",
+            "description": "Relative API path for this dataset access mode."
+          },
+          "rel": {
+            "type": "string",
+            "title": "Rel",
+            "description": "Relationship type of the link."
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Human-readable label for the link target."
+          }
+        },
+        "type": "object",
+        "required": ["href", "rel", "title"],
+        "title": "DatasetAccessLink",
+        "description": "Access link for a managed dataset."
+      },
+      "DatasetDetailRecord": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id",
+            "description": "Stable public identifier for the managed dataset."
+          },
+          "source_dataset_id": {
+            "type": "string",
+            "title": "Source Dataset Id",
+            "description": "Dataset template id from which this managed dataset was created."
+          },
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name",
+            "description": "Full display name of the dataset."
+          },
+          "short_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Short Name",
+            "description": "Short display name of the dataset."
+          },
+          "variable": {
+            "type": "string",
+            "title": "Variable",
+            "description": "Primary raster variable stored in the dataset."
+          },
+          "period_type": {
+            "type": "string",
+            "title": "Period Type",
+            "description": "Temporal period type of the dataset, for example daily or yearly."
+          },
+          "units": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Units",
+            "description": "Units of the primary variable."
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution",
+            "description": "Native spatial resolution summary."
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source",
+            "description": "Upstream source name."
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url",
+            "description": "Upstream source documentation URL."
+          },
+          "extent": {
+            "$ref": "#/components/schemas/ArtifactCoverage",
+            "description": "Current covered spatial and temporal extent of the dataset."
+          },
+          "last_updated": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Updated",
+            "description": "Timestamp when Open Climate Service last materialized or updated the dataset."
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetAccessLink"
+            },
+            "type": "array",
+            "title": "Links",
+            "description": "Available API access links for this managed dataset."
+          },
+          "publication": {
+            "$ref": "#/components/schemas/DatasetPublication",
+            "description": "Publication summary for this managed dataset."
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetVersionRecord"
+            },
+            "type": "array",
+            "title": "Versions",
+            "description": "Slim version history derived from internal artifact records."
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "source_dataset_id",
+          "dataset_name",
+          "variable",
+          "period_type",
+          "extent",
+          "last_updated",
+          "publication",
+          "versions"
+        ],
+        "title": "DatasetDetailRecord",
+        "description": "Detailed native FastAPI view of a managed dataset."
+      },
+      "DatasetListResponse": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "Self-describing envelope type for this collection response.",
+            "default": "DatasetList",
+            "examples": ["DatasetList"]
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetRecord"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "Managed datasets available in this Open Climate Service instance.",
+            "examples": [
+              [
+                {
+                  "dataset_id": "chirps3_precipitation_daily_sle",
+                  "dataset_name": "Total precipitation (CHIRPS3)",
+                  "extent": {
+                    "spatial": {
+                      "xmax": -10.1,
+                      "xmin": -13.5,
+                      "ymax": 10,
+                      "ymin": 6.9
+                    },
+                    "temporal": {
+                      "end": "2024-01-31",
+                      "start": "2024-01-01"
+                    }
+                  },
+                  "last_updated": "2026-03-27T08:40:24.344473Z",
+                  "links": [
+                    {
+                      "href": "/datasets/chirps3_precipitation_daily_sle",
+                      "rel": "self",
+                      "title": "Dataset detail"
+                    },
+                    {
+                      "href": "/zarr/chirps3_precipitation_daily_sle",
+                      "rel": "zarr",
+                      "title": "Zarr store"
+                    }
+                  ],
+                  "period_type": "daily",
+                  "publication": {
+                    "published_at": "2026-03-27T08:40:24.346357Z",
+                    "status": "published"
+                  },
+                  "resolution": "5 km x 5 km",
+                  "short_name": "Total precipitation",
+                  "source": "CHIRPS v3",
+                  "source_dataset_id": "chirps3_precipitation_daily",
+                  "source_url": "https://www.chc.ucsb.edu/data/chirps3",
+                  "units": "mm",
+                  "variable": "precip"
+                }
+              ]
+            ]
+          }
+        },
+        "type": "object",
+        "title": "DatasetListResponse",
+        "description": "Envelope response for managed datasets."
+      },
+      "DatasetPublication": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/PublicationStatus",
+            "description": "Publication state of the dataset in the OGC-facing layer."
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At",
+            "description": "Timestamp when the dataset was last published."
+          }
+        },
+        "type": "object",
+        "required": ["status"],
+        "title": "DatasetPublication",
+        "description": "Public publication summary for a managed dataset."
+      },
+      "DatasetRecord": {
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id",
+            "description": "Stable public identifier for the managed dataset."
+          },
+          "source_dataset_id": {
+            "type": "string",
+            "title": "Source Dataset Id",
+            "description": "Dataset template id from which this managed dataset was created."
+          },
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name",
+            "description": "Full display name of the dataset."
+          },
+          "short_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Short Name",
+            "description": "Short display name of the dataset."
+          },
+          "variable": {
+            "type": "string",
+            "title": "Variable",
+            "description": "Primary raster variable stored in the dataset."
+          },
+          "period_type": {
+            "type": "string",
+            "title": "Period Type",
+            "description": "Temporal period type of the dataset, for example daily or yearly."
+          },
+          "units": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Units",
+            "description": "Units of the primary variable."
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution",
+            "description": "Native spatial resolution summary."
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source",
+            "description": "Upstream source name."
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url",
+            "description": "Upstream source documentation URL."
+          },
+          "extent": {
+            "$ref": "#/components/schemas/ArtifactCoverage",
+            "description": "Current covered spatial and temporal extent of the dataset."
+          },
+          "last_updated": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Updated",
+            "description": "Timestamp when Open Climate Service last materialized or updated the dataset."
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetAccessLink"
+            },
+            "type": "array",
+            "title": "Links",
+            "description": "Available API access links for this managed dataset."
+          },
+          "publication": {
+            "$ref": "#/components/schemas/DatasetPublication",
+            "description": "Publication summary for this managed dataset."
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "source_dataset_id",
+          "dataset_name",
+          "variable",
+          "period_type",
+          "extent",
+          "last_updated",
+          "publication"
+        ],
+        "title": "DatasetRecord",
+        "description": "Native FastAPI view of a managed dataset."
+      },
+      "DatasetVersionRecord": {
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Timestamp when this dataset version was created."
+          },
+          "format": {
+            "$ref": "#/components/schemas/ArtifactFormat",
+            "description": "Stored format of this dataset version."
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/ArtifactCoverage",
+            "description": "Covered spatial and temporal extent for this dataset version."
+          },
+          "request_scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtifactRequestScope"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Original request scope that produced this version, when available."
+          }
+        },
+        "type": "object",
+        "required": ["created_at", "format", "coverage"],
+        "title": "DatasetVersionRecord",
+        "description": "Version summary as exposed from a dataset detail view."
+      },
+      "ExtentRecord": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "Human-readable name of the extent."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Optional descriptive text for the extent."
+          },
+          "bbox": {
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array",
+            "maxItems": 4,
+            "minItems": 4,
+            "title": "Bbox",
+            "description": "Configured bounding box for the extent as xmin, ymin, xmax, ymax."
+          }
+        },
+        "type": "object",
+        "required": ["bbox"],
+        "title": "ExtentRecord",
+        "description": "Configured spatial extent for this Open Climate Service instance."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthStatus": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/Status"
+          }
+        },
+        "type": "object",
+        "required": ["status"],
+        "title": "HealthStatus",
+        "description": "Health check response."
+      },
+      "IngestionListResponse": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "Self-describing envelope type for this collection response.",
+            "default": "IngestionList",
+            "examples": ["IngestionList"]
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IngestionResponse"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "Ingestion run records available in this Open Climate Service instance."
+          }
+        },
+        "type": "object",
+        "title": "IngestionListResponse",
+        "description": "Envelope response for ingestion run records."
+      },
+      "IngestionResponse": {
+        "properties": {
+          "ingestion_id": {
+            "type": "string",
+            "title": "Ingestion Id",
+            "description": "Identifier of the ingestion event."
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Execution status of the ingestion request."
+          },
+          "dataset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DatasetRecord"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Managed dataset summary. None for async requests."
+          }
+        },
+        "type": "object",
+        "required": ["ingestion_id", "status"],
+        "title": "IngestionResponse",
+        "description": "Response returned after creating or looking up a managed dataset via ingestion."
+      },
+      "JobError": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": ["type", "message"],
+        "title": "JobError",
+        "description": "Serialized error details for a failed job."
+      },
+      "JobEvent": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          },
+          "eventID": {
+            "type": "string",
+            "title": "Eventid"
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Time"
+          }
+        },
+        "type": "object",
+        "required": ["type", "source", "eventID", "time"],
+        "title": "JobEvent",
+        "description": "Domain event persisted atomically with a successful native job."
+      },
+      "JobLink": {
+        "properties": {
+          "href": {
+            "type": "string",
+            "title": "Href"
+          },
+          "rel": {
+            "type": "string",
+            "title": "Rel"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": ["href", "rel"],
+        "title": "JobLink",
+        "description": "Hypermedia link for a job resource."
+      },
+      "JobProgress": {
+        "properties": {
+          "done": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
+          "percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percent"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "title": "JobProgress",
+        "description": "Progress details reported by a running job."
+      },
+      "JobRecord": {
+        "properties": {
+          "jobID": {
+            "type": "string",
+            "title": "Jobid"
+          },
+          "processID": {
+            "type": "string",
+            "title": "Processid"
+          },
+          "type": {
+            "$ref": "#/components/schemas/JobType",
+            "default": "process"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finishedat"
+          },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt",
+            "default": 0
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "title": "Maxattempts",
+            "default": 1
+          },
+          "executorKind": {
+            "type": "string",
+            "title": "Executorkind",
+            "default": "thread"
+          },
+          "request": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Request"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/JobProgress"
+          },
+          "result": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/JobEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cancelRequested": {
+            "type": "boolean",
+            "title": "Cancelrequested",
+            "default": false
+          },
+          "retryAfter": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retryafter"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cursor"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/JobLink"
+            },
+            "type": "array",
+            "title": "Links"
+          }
+        },
+        "type": "object",
+        "required": ["jobID", "processID", "status", "createdAt"],
+        "title": "JobRecord",
+        "description": "Persisted native job record."
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": ["accepted", "running", "retrying", "successful", "failed", "cancelled"],
+        "title": "JobStatus",
+        "description": "Persisted lifecycle states for native jobs."
+      },
+      "JobType": {
+        "type": "string",
+        "enum": ["process"],
+        "title": "JobType",
+        "description": "Native job categories."
+      },
+      "Link": {
+        "properties": {
+          "href": {
+            "type": "string",
+            "title": "Href"
+          },
+          "rel": {
+            "type": "string",
+            "title": "Rel"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": ["href", "rel", "title"],
+        "title": "Link",
+        "description": "Hypermedia link."
+      },
+      "OpenEOJobCreate": {
+        "properties": {
+          "process": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Process"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget"
+          }
+        },
+        "type": "object",
+        "required": ["process"],
+        "title": "OpenEOJobCreate",
+        "description": "Request body for POST /jobs."
+      },
+      "OpenEOJobListResponse": {
+        "properties": {
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/OpenEOJobRecord"
+            },
+            "type": "array",
+            "title": "Jobs"
+          },
+          "links": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Links"
+          }
+        },
+        "type": "object",
+        "required": ["jobs"],
+        "title": "OpenEOJobListResponse",
+        "description": "Envelope for GET /jobs."
+      },
+      "OpenEOJobRecord": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "process": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Process"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OpenEOJobStatus"
+          },
+          "created": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created"
+          },
+          "updated": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage"
+          },
+          "logs": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logs"
+          },
+          "links": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Links"
+          }
+        },
+        "type": "object",
+        "required": ["id", "status", "created"],
+        "title": "OpenEOJobRecord",
+        "description": "Persisted openEO job record."
+      },
+      "OpenEOJobResults": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "Feature"
+          },
+          "stac_version": {
+            "type": "string",
+            "title": "Stac Version"
+          },
+          "stac_extensions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Stac Extensions"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "geometry": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geometry"
+          },
+          "properties": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Properties"
+          },
+          "assets": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Assets"
+          },
+          "links": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Links"
+          }
+        },
+        "type": "object",
+        "required": ["stac_version", "id"],
+        "title": "OpenEOJobResults",
+        "description": "Response for GET /jobs/{id}/results."
+      },
+      "OpenEOJobStatus": {
+        "type": "string",
+        "enum": ["created", "queued", "running", "finished", "error", "canceled"],
+        "title": "OpenEOJobStatus",
+        "description": "openEO-compliant job lifecycle states."
+      },
+      "OpenEOJobUpdate": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "process": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Process"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget"
+          }
+        },
+        "type": "object",
+        "title": "OpenEOJobUpdate",
+        "description": "Request body for PATCH /jobs/{job_id}."
+      },
+      "PublicationStatus": {
+        "type": "string",
+        "enum": ["unpublished", "published"],
+        "title": "PublicationStatus",
+        "description": "Publication lifecycle states."
+      },
+      "ScheduleListResponse": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "running": {
+            "type": "boolean",
+            "title": "Running"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "schedules": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleStatus"
+            },
+            "type": "array",
+            "title": "Schedules"
+          }
+        },
+        "type": "object",
+        "required": ["enabled", "running", "timezone"],
+        "title": "ScheduleListResponse",
+        "description": "Status of the process-local scheduler and configured schedules."
+      },
+      "ScheduleStatus": {
+        "properties": {
+          "schedule_id": {
+            "type": "string",
+            "title": "Schedule Id"
+          },
+          "dataset_id": {
+            "type": "string",
+            "title": "Dataset Id"
+          },
+          "cron": {
+            "type": "string",
+            "title": "Cron"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "publish": {
+            "type": "boolean",
+            "title": "Publish"
+          },
+          "max_attempts": {
+            "type": "integer",
+            "title": "Max Attempts"
+          },
+          "next_check": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Check"
+          },
+          "last_check": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Check"
+          },
+          "last_outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckOutcome"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Message"
+          },
+          "last_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Job Id"
+          }
+        },
+        "type": "object",
+        "required": ["schedule_id", "dataset_id", "cron", "timezone", "publish", "max_attempts"],
+        "title": "ScheduleStatus",
+        "description": "Configuration and volatile runtime status for one dataset schedule."
+      },
+      "StacCatalogResponse": {
+        "properties": {
+          "stac_version": {
+            "type": "string",
+            "title": "Stac Version"
+          },
+          "type": {
+            "type": "string",
+            "const": "Catalog",
+            "title": "Type"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/StacLink"
+            },
+            "type": "array",
+            "title": "Links"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": ["stac_version", "type", "id", "title", "description", "links"],
+        "title": "StacCatalogResponse",
+        "description": "Catalog response with flexible extension fields."
+      },
+      "StacLink": {
+        "properties": {
+          "rel": {
+            "type": "string",
+            "title": "Rel"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": ["rel", "href"],
+        "title": "StacLink",
+        "description": "Minimal STAC link representation."
+      },
+      "Status": {
+        "type": "string",
+        "enum": ["healthy", "degraded", "unhealthy"],
+        "title": "Status",
+        "description": "Health check status values."
+      },
+      "SyncAction": {
+        "type": "string",
+        "enum": ["rematerialize", "append", "no_op", "not_syncable"],
+        "title": "SyncAction",
+        "description": "Planner-selected sync action.\n\nAPPEND means Open Climate Service updates an existing managed dataset by writing only\nthe missing periods needed to reach the planned target end by extending the\ncommitted artifact store."
+      },
+      "SyncDatasetRequest": {
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End",
+            "description": "Optional end period to sync through."
+          },
+          "publish": {
+            "type": "boolean",
+            "title": "Publish",
+            "description": "Whether to publish the resulting dataset version.",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "SyncDatasetRequest",
+        "description": "Request payload for syncing a managed dataset forward."
+      },
+      "SyncDetail": {
+        "properties": {
+          "source_dataset_id": {
+            "type": "string",
+            "title": "Source Dataset Id",
+            "description": "Source dataset template id used to plan the sync."
+          },
+          "sync_kind": {
+            "$ref": "#/components/schemas/SyncKind",
+            "description": "Sync planning mode declared by the dataset template."
+          },
+          "action": {
+            "$ref": "#/components/schemas/SyncAction",
+            "description": "Planner-selected sync action."
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "description": "Stable machine-readable reason for the selected action."
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Human-readable summary of the planned sync outcome."
+          },
+          "current_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Start",
+            "description": "First period currently covered by the managed dataset before sync."
+          },
+          "current_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current End",
+            "description": "Last period currently covered by the managed dataset before sync."
+          },
+          "target_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target End",
+            "description": "Resolved target period after applying request defaults and availability constraints."
+          },
+          "target_end_source": {
+            "type": "string",
+            "title": "Target End Source",
+            "description": "Where target_end came from, for example request, default_today, request_clamped_by_availability, default_today_clamped_by_availability, or current_coverage."
+          },
+          "delta_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta Start",
+            "description": "First missing period planned for append execution, when applicable."
+          },
+          "delta_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta End",
+            "description": "Last missing period planned for append execution, when applicable."
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_dataset_id",
+          "sync_kind",
+          "action",
+          "reason",
+          "message",
+          "target_end_source"
+        ],
+        "title": "SyncDetail",
+        "description": "Structured planner output for one managed dataset sync decision.\n\nThis record exists so callers can see both the operational outcome and the\nreasoning that led to it without needing to infer that logic from status\nstrings alone."
+      },
+      "SyncKind": {
+        "type": "string",
+        "enum": ["temporal", "release", "static"],
+        "title": "SyncKind",
+        "description": "Supported sync planning modes declared by dataset templates."
+      },
+      "SyncResponse": {
+        "properties": {
+          "sync_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Id",
+            "description": "Identifier of the sync-created version when a new version was written."
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Execution status, for example completed or up_to_date."
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "description": "Human-readable explanation of the sync outcome."
+          },
+          "dataset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DatasetDetailRecord"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Current dataset detail. None for async requests."
+          },
+          "sync_detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncDetail"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Planner output describing how Open Climate Service interpreted the sync request."
+          }
+        },
+        "type": "object",
+        "required": ["status"],
+        "title": "SyncResponse",
+        "description": "Public response returned after planning and optionally running a sync."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": ["loc", "msg", "type"],
+        "title": "ValidationError"
+      },
+      "WorkflowListResponse": {
+        "properties": {
+          "processes": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRecord"
+            },
+            "type": "array",
+            "title": "Processes"
+          },
+          "links": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Links"
+          }
+        },
+        "type": "object",
+        "required": ["processes"],
+        "title": "WorkflowListResponse",
+        "description": "Envelope for GET /process_graphs."
+      },
+      "WorkflowRecord": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "parameters": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Parameters"
+          },
+          "returns": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Returns"
+          },
+          "process_graph": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Process Graph"
+          },
+          "links": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Links"
+          }
+        },
+        "type": "object",
+        "required": ["id"],
+        "title": "WorkflowRecord",
+        "description": "Persisted workflow (user-defined process)."
+      }
+    }
+  }
+}

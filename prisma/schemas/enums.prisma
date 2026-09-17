@@ -1,0 +1,68 @@
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum PipelineExecutionStatus {
+  PENDING
+  RUNNING
+  AWAITING_STEP
+  PAUSED
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum StepExecutionStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  TIMED_OUT
+  SKIPPED
+  CANCELLED
+}
+
+enum TaskExecutionStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+enum ScheduleStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum ConcurrencyPolicy {
+  ALLOW
+  SKIP
+  REPLACE
+}
+
+enum StepAttemptKind {
+  AUTOMATIC
+  MANUAL
+}
+
+enum StepRetryCommandStatus {
+  PENDING
+  DISPATCHED
+  COMPLETED
+  FAILED
+}
+
+enum OutboxDeliveryStatus {
+  PENDING
+  LEASED
+  PUBLISHED
+  FAILED
+}

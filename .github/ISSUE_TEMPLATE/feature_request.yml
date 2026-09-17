@@ -1,0 +1,47 @@
+name: Feature request
+description: Propose a change to the CAPS backend
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For operator-console UI, use [hisptz/caps-app](https://github.com/hisptz/caps-app) instead.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is hard or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: API, handler, scheduler, or ops change you want.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Pipeline / handlers
+        - API
+        - Scheduler
+        - Worker / queues
+        - Observability
+        - Docs / DX
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: contributing
+    attributes:
+      label: Willing to contribute
+      options:
+        - label: I can open a PR following CONTRIBUTING.md

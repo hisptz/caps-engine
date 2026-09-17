@@ -1,0 +1,99 @@
+# =============================================================
+# CHAP integration overlay
+# =============================================================
+#
+# WHEN TO USE THIS FILE:
+#   When CHAP is already running in Docker and you do not want
+#   duplicate postgres and rabbitmq instances alongside CAPS.
+#
+# HOW TO USE:
+#   docker compose -f docker-compose.yml -f docker-compose.chap.yml up -d
+#
+#   Or use the Makefile shortcut:
+#   make up-chap
+#
+# REQUIRED ENVIRONMENT VARIABLES (add to your .env file):
+#   CHAP_NETWORK       — Docker network CHAP is running on
+#   CHAP_DATABASE_URL  — Postgres URL pointing at CHAP's postgres instance
+#   CHAP_RABBITMQ_URL  — RabbitMQ URL pointing at CHAP's RabbitMQ instance
+#
+# HOW TO FIND THE CHAP NETWORK NAME:
+#   docker network ls | grep chap
+#
+# HOW TO FIND CHAP'S POSTGRES HOST:
+#   docker inspect <chap_postgres_container_name>
+#   Look for "Name" under Networks — that name is the hostname on the shared network.
+#
+# NOTE: Do not scale the scheduler service. Running more than one scheduler
+#       instance will cause duplicate pipeline triggers.
+# =============================================================
+
+networks:
+  chap:
+    name: ${CHAP_NETWORK:-chap_default}
+    external: true
+
+services:
+  # Suppress the CAPS-managed postgres and rabbitmq — CHAP provides them.
+  # Assigning a "disabled" profile means these services only start when you
+  # explicitly activate that profile, which never happens in normal usage.
+  postgres:
+    profiles:
+      - disabled
+
+  rabbitmq:
+    profiles:
+      - disabled
+
+  # Override migrate: remove postgres dependency (it no longer exists in this
+  # compose context), connect to CHAP network, and point at CHAP's postgres.
+  migrate:
+    environment:
+      DATABASE_URL: ${CHAP_DATABASE_URL}
+    depends_on: {}
+    networks:
+      - chap
+
+  # Override worker-1: remove infra dependencies, use CHAP's postgres and RabbitMQ.
+  worker-1:
+    environment:
+      DATABASE_URL: ${CHAP_DATABASE_URL}
+      RABBITMQ_URL: ${CHAP_RABBITMQ_URL}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - chap
+
+  # Override worker-2: same as worker-1.
+  worker-2:
+    environment:
+      DATABASE_URL: ${CHAP_DATABASE_URL}
+      RABBITMQ_URL: ${CHAP_RABBITMQ_URL}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - chap
+
+  # Override scheduler: remove infra dependencies, use CHAP's postgres.
+  # WARNING: Do not scale this service. Exactly one instance must run at all times.
+  scheduler:
+    environment:
+      DATABASE_URL: ${CHAP_DATABASE_URL}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - chap
+
+  # Override api: remove postgres dependency, use CHAP's postgres.
+  api:
+    environment:
+      DATABASE_URL: ${CHAP_DATABASE_URL}
+      RABBITMQ_URL: ${CHAP_RABBITMQ_URL}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - chap

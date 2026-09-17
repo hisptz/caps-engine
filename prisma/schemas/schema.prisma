@@ -1,0 +1,13 @@
+// ============================================================
+// CAPS — Pipeline Execution Engine
+// Prisma Schema
+// ============================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}

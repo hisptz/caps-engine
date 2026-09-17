@@ -1,0 +1,150 @@
+#T his should be run alongside CHAP's compose.yml, you can leave the name file as `compose.override.yml` or change it to something like `comopse.caps.yml` and then include it in the CHAP's `compose.yml`
+
+services:
+  # ============================================================
+  # Infrastructure
+  # ============================================================
+  caps_postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${CAPS_PG_USER}
+      POSTGRES_PASSWORD: ${CAPS_PG_PASSWORD}
+      POSTGRES_DB: ${CAPS_PG_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CAPS_PG_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - caps
+  caps_rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - caps
+  # ============================================================
+  # One-shot migration runner — completes before app services start
+  # ============================================================
+  caps_migrate:
+    image: ghcr.io/hisptz/caps-engine/migrate:${IMAGE_TAG:-latest}
+    environment:
+      DATABASE_URL: ${CAPS_DB_URL}
+    depends_on:
+      caps_postgres:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - caps
+  caps_ocs:
+    image: ghcr.io/hisptz/ocs:latest
+    platform: linux/amd64
+    ports:
+      - "8001:8000"
+    environment:
+      DHIS2_BASE_URL: ${DHIS2_BASE_URL}
+      DHIS2_USERNAME: ${DHIS2_USERNAME}
+      DHIS2_PASSWORD: ${DHIS2_PASSWORD}
+      DHIS2_HTTP_TIMEOUT_SECONDS: 30
+      DHIS2_HTTP_RETRIES: 3
+      CLIMATE_API_CONFIG: "/app/climate-service.yaml"
+    volumes:
+      - ./.climate-data/climate-service.yaml:/app/climate-service.yaml
+      - ./.climate-data/.ecmwfdatastoresrc:/home/ocs/.ecmwfdatastoresrc
+      - climate_data/data:/app/data
+    networks:
+      - caps
+      # ============================================================
+      # Application services
+      # ============================================================
+  caps_worker:
+    image: ghcr.io/hisptz/caps-engine/worker:${IMAGE_TAG:-latest}
+    environment:
+      DATABASE_URL: ${CAPS_DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      DHIS2_BASE_URL: ${DHIS2_BASE_URL}
+      DHIS2_USERNAME: ${DHIS2_USERNAME}
+      DHIS2_PASSWORD: ${DHIS2_PASSWORD}
+      CHAP_BASE_URL: ${CHAP_BASE_URL}
+      CHAP_API_TOKEN: ${CHAP_API_TOKEN:-}
+      CLIMATE_API_BASE_URL: ${CLIMATE_API_BASE_URL}
+      OUTPUTS_DIR: /tmp/caps-outputs
+    depends_on:
+      caps_postgres:
+        condition: service_healthy
+      caps_rabbitmq:
+        condition: service_healthy
+      caps_migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - caps
+  # WARNING: Do not scale this service. Running more than one scheduler instance
+  # will cause duplicate pipeline triggers. This service must always have exactly
+  # one replica.
+  caps_scheduler:
+    image: ghcr.io/hisptz/caps-engine/scheduler:${IMAGE_TAG:-latest}
+    environment:
+      DATABASE_URL: ${CAPS_DB_URL}
+      DHIS2_BASE_URL: ${DHIS2_BASE_URL}
+      DHIS2_USERNAME: ${DHIS2_USERNAME}
+      DHIS2_PASSWORD: ${DHIS2_PASSWORD}
+      CHAP_BASE_URL: ${CHAP_BASE_URL}
+      CHAP_API_TOKEN: ${CHAP_API_TOKEN:-}
+      CLIMATE_API_BASE_URL: ${CLIMATE_API_BASE_URL}
+    depends_on:
+      caps_postgres:
+        condition: service_healthy
+      caps_migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - caps
+  caps_api:
+    image: ghcr.io/hisptz/caps-engine/api:${IMAGE_TAG:-latest}
+    environment:
+      DATABASE_URL: ${CAPS_DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      PORT: 4000
+      DHIS2_BASE_URL: ${DHIS2_BASE_URL}
+      DHIS2_USERNAME: ${DHIS2_USERNAME}
+      DHIS2_PASSWORD: ${DHIS2_PASSWORD}
+      CHAP_BASE_URL: ${CHAP_BASE_URL}
+      CHAP_API_TOKEN: ${CHAP_API_TOKEN:-}
+      CLIMATE_API_BASE_URL: ${CLIMATE_API_BASE_URL}
+    ports:
+      - "${API_PORT:-4000}:4000"
+    depends_on:
+      caps_postgres:
+        condition: service_healthy
+      caps_rabbitmq:
+        condition: service_healthy
+      caps_migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - caps
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  climate_data:
+
+networks:
+  caps:
+    name: caps

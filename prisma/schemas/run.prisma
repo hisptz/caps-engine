@@ -1,0 +1,155 @@
+// ============================================================
+// EXECUTION CLUSTER
+// Live runtime state — created and mutated during execution
+// ============================================================
+
+model PipelineExecution {
+  id         String @id @default(uuid()) @db.Uuid
+  pipelineId String @db.Uuid
+
+  // Populated when this execution was fired by a schedule
+  scheduleId String? @db.Uuid
+
+  status PipelineExecutionStatus @default(PENDING)
+
+  // Shared state passed between steps
+  context Json @default("{}")
+
+  // Cursor: which step are we currently on
+  currentStepIndex Int @default(0)
+
+  // What triggered this execution (e.g. "schedule", "api", "manual")
+  triggeredBy String?
+
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  pipeline       Pipeline           @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  schedule       PipelineSchedule?  @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  stepExecutions StepExecution[]
+  retryCommands  StepRetryCommand[]
+  logs           ExecutionLog[]
+
+  @@index([pipelineId])
+  @@index([scheduleId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("pipeline_executions")
+}
+
+model StepExecution {
+  id          String              @id @default(uuid()) @db.Uuid
+  executionId String              @db.Uuid
+  stepId      String              @db.Uuid
+  status      StepExecutionStatus @default(PENDING)
+
+  // Increments with each retry attempt (1-indexed)
+  attemptNumber Int @default(1)
+
+  // AUTOMATIC = coordinator/worker retries; MANUAL = operator retry
+  attemptKind StepAttemptKind @default(AUTOMATIC)
+
+  // Immutable snapshot of the pipeline step definition at attempt creation.
+  // Required for manual retry fidelity; legacy rows may be null.
+  stepSnapshot Json?
+
+  // Snapshot of input passed to this step attempt
+  input Json?
+
+  // Output produced by this step (passed as input to next step)
+  output Json?
+
+  errorMessage String?
+  errorStack   String?
+
+  // Set once when the coordinator has processed this attempt's result
+  resultProcessedAt DateTime?
+
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  execution      PipelineExecution  @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  step           PipelineStep       @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  taskExecutions TaskExecution[]
+  logs           ExecutionLog[]
+  retrySource    StepRetryCommand?  @relation("RetrySourceAttempt")
+  retryReplacement StepRetryCommand? @relation("RetryReplacementAttempt")
+
+  @@unique([executionId, stepId, attemptNumber])
+  @@index([executionId])
+  @@index([stepId])
+  @@index([status])
+  @@map("step_executions")
+}
+
+model StepRetryCommand {
+  id                         String                 @id @default(uuid()) @db.Uuid
+  executionId                String                 @db.Uuid
+  sourceStepExecutionId      String                 @db.Uuid
+  replacementStepExecutionId String                 @db.Uuid
+  idempotencyKey             String
+  status                     StepRetryCommandStatus @default(PENDING)
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
+
+  execution                PipelineExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  sourceStepExecution      StepExecution     @relation("RetrySourceAttempt", fields: [sourceStepExecutionId], references: [id], onDelete: Cascade)
+  replacementStepExecution StepExecution     @relation("RetryReplacementAttempt", fields: [replacementStepExecutionId], references: [id], onDelete: Cascade)
+
+  @@unique([idempotencyKey])
+  @@unique([sourceStepExecutionId])
+  @@unique([replacementStepExecutionId])
+  @@index([executionId])
+  @@map("step_retry_commands")
+}
+
+model OutboxMessage {
+  id              String               @id @default(uuid()) @db.Uuid
+  destination     String
+  payload         Json
+  status          OutboxDeliveryStatus @default(PENDING)
+  leaseOwner      String?
+  leasedAt        DateTime?
+  publishAttempts Int                  @default(0)
+  lastError       String?
+  availableAt     DateTime             @default(now())
+  publishedAt     DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([status, availableAt])
+  @@map("outbox_messages")
+}
+
+model TaskExecution {
+  id              String @id @default(uuid()) @db.Uuid
+  stepExecutionId String @db.Uuid
+  name            String
+
+  // Execution order within the step (0-indexed)
+  taskOrder Int
+
+  status TaskExecutionStatus @default(PENDING)
+
+  input  Json?
+  output Json?
+
+  errorMessage String?
+  errorStack   String?
+
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  stepExecution StepExecution  @relation(fields: [stepExecutionId], references: [id], onDelete: Cascade)
+  logs          ExecutionLog[]
+
+  @@index([stepExecutionId])
+  @@index([status])
+  @@map("task_executions")
+}

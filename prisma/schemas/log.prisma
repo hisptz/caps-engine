@@ -1,0 +1,35 @@
+// ============================================================
+// OBSERVABILITY CLUSTER
+// Append-only event log — never updated, only inserted
+// ============================================================
+
+model ExecutionLog {
+  id String @id @default(uuid()) @db.Uuid
+
+  // Every log entry belongs to a pipeline execution
+  executionId String @db.Uuid
+
+  // Optionally scoped to a step attempt
+  stepExecutionId String? @db.Uuid
+
+  // Optionally scoped to a task within that step
+  taskExecutionId String? @db.Uuid
+
+  level   LogLevel @default(INFO)
+  message String
+
+  // Structured context: error stacks, input snapshots, timing, etc.
+  metadata Json @default("{}")
+
+  loggedAt DateTime @default(now())
+
+  execution     PipelineExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  stepExecution StepExecution?    @relation(fields: [stepExecutionId], references: [id], onDelete: Cascade)
+  taskExecution TaskExecution?    @relation(fields: [taskExecutionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId, loggedAt])
+  @@index([stepExecutionId])
+  @@index([taskExecutionId])
+  @@index([level])
+  @@map("execution_logs")
+}

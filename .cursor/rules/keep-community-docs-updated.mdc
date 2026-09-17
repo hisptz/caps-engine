@@ -1,0 +1,11 @@
+---
+description: Keep README, CONTRIBUTING, GETTING_STARTED, and GitHub templates in sync with source
+globs: src/**/*.{ts,tsx},prisma/**/*.prisma,package.json,Makefile,.env.example,docker-compose*.yml,Dockerfile,.github/workflows/*
+alwaysApply: false
+---
+
+# Keep community docs updated
+
+When you change source in this repo, in the same turn follow **update-community-docs**: patch `README.md`, `docs/GETTING_STARTED.md`, `CONTRIBUTING.md`, `SECURITY.md`, and `.github` templates if commands, env, layout, CI, or services changed.
+
+Skip CODE_OF_CONDUCT unless the contact or project name changed. Never edit LICENSE. Do not invent emails or env vars.

@@ -1,0 +1,191 @@
+services:
+  # ============================================================
+  # Infrastructure
+  # ============================================================
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - caps
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - caps
+
+  # ============================================================
+  # One-shot migration runner — completes before app services start
+  # ============================================================
+
+  migrate:
+    image: ghcr.io/hisptz/caps-engine/migrate:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrate
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - caps
+      - chap
+
+  # ============================================================
+  # Application services
+  # ============================================================
+
+  worker-1:
+    image: ghcr.io/hisptz/caps-engine/worker:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      DHIS2_BASE_URL: ${DHIS2_BASE_URL}
+      DHIS2_USERNAME: ${DHIS2_USERNAME}
+      DHIS2_PASSWORD: ${DHIS2_PASSWORD}
+      CHAP_BASE_URL: ${CHAP_BASE_URL}
+      CHAP_API_TOKEN: ${CHAP_API_TOKEN:-}
+      CLIMATE_API_BASE_URL: ${CLIMATE_API_BASE_URL}
+      CLIMATE_DATA_BASE_URL: ${CLIMATE_DATA_BASE_URL}
+      OUTPUTS_DIR: /tmp/caps-outputs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - caps
+      - chap
+
+  worker-2:
+    image: ghcr.io/hisptz/caps-engine/worker:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      DHIS2_BASE_URL: ${DHIS2_BASE_URL}
+      DHIS2_USERNAME: ${DHIS2_USERNAME}
+      DHIS2_PASSWORD: ${DHIS2_PASSWORD}
+      CHAP_BASE_URL: ${CHAP_BASE_URL}
+      CHAP_API_TOKEN: ${CHAP_API_TOKEN:-}
+      CLIMATE_API_BASE_URL: ${CLIMATE_API_BASE_URL}
+      CLIMATE_DATA_BASE_URL: ${CLIMATE_DATA_BASE_URL}
+      OUTPUTS_DIR: /tmp/caps-outputs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - caps
+      - chap
+
+  # WARNING: Do not scale this service. Running more than one scheduler instance
+  # will cause duplicate pipeline triggers. This service must always have exactly
+  # one replica.
+  scheduler:
+    image: ghcr.io/hisptz/caps-engine/scheduler:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: scheduler
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      DHIS2_BASE_URL: ${DHIS2_BASE_URL}
+      DHIS2_USERNAME: ${DHIS2_USERNAME}
+      DHIS2_PASSWORD: ${DHIS2_PASSWORD}
+      CHAP_BASE_URL: ${CHAP_BASE_URL}
+      CHAP_API_TOKEN: ${CHAP_API_TOKEN:-}
+      CLIMATE_API_BASE_URL: ${CLIMATE_API_BASE_URL}
+      CLIMATE_DATA_BASE_URL: ${CLIMATE_DATA_BASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - caps
+      - chap
+
+  api:
+    image: ghcr.io/hisptz/caps-engine/api:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      PORT: 4000
+      DHIS2_BASE_URL: ${DHIS2_BASE_URL}
+      DHIS2_USERNAME: ${DHIS2_USERNAME}
+      DHIS2_PASSWORD: ${DHIS2_PASSWORD}
+      CHAP_BASE_URL: ${CHAP_BASE_URL}
+      CHAP_API_TOKEN: ${CHAP_API_TOKEN:-}
+      CLIMATE_API_BASE_URL: ${CLIMATE_API_BASE_URL}
+      CLIMATE_DATA_BASE_URL: ${CLIMATE_DATA_BASE_URL}
+    ports:
+      - "${API_PORT:-4000}:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - caps
+      - chap
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  caps:
+    name: caps
+  chap: # Replace all occurrences with the name of the network you created in the CHAP deployment
+    external: true
