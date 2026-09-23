@@ -31,6 +31,7 @@ FROM source AS compile-worker
 ARG TARGETARCH
 ENV TARGETARCH=${TARGETARCH}
 RUN bun run scripts/compile.ts worker
+RUN mkdir -p /app/.build/caps-outputs
 
 FROM source AS compile-scheduler
 ARG TARGETARCH
@@ -51,6 +52,7 @@ FROM gcr.io/distroless/cc-debian12:nonroot AS worker
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=compile-worker --chown=nonroot:nonroot /app/.build/caps-worker /app/caps-worker
+COPY --from=compile-worker --chown=nonroot:nonroot /app/.build/caps-outputs /tmp/caps-outputs
 USER nonroot
 ENTRYPOINT ["/app/caps-worker"]
 
