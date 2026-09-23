@@ -1,6 +1,7 @@
 import { AxiosError } from "axios";
 import { chapClient } from "@/shared/clients/chap.ts";
 import { ApiErrorCode } from "@/shared/api/errorCodes.ts";
+import { logger } from "@/shared/utils";
 import type { components } from "~types/chap";
 
 type BacktestRead = components["schemas"]["BacktestRead"];
@@ -50,8 +51,17 @@ function chapErrorFields(error: unknown) {
 export async function getEvaluations(): Promise<EvaluationsResponse> {
   try {
     const response = await chapClient.get<BacktestRead[]>("/v1/crud/backtests");
-    const backtests = Array.isArray(response.data) ? response.data : [];
-    return { evaluations: backtests.map(mapEvaluation) };
+    if (!Array.isArray(response.data)) {
+      logger.warn(
+        `CHAP /v1/crud/backtests returned ${typeof response.data}, expected an array: ${JSON.stringify(response.data).slice(0, 200)}`
+      );
+      return {
+        evaluations: [],
+        error: "CHAP returned an unexpected response for backtests",
+        code: ApiErrorCode.CHAP_UNAVAILABLE,
+      };
+    }
+    return { evaluations: response.data.map(mapEvaluation) };
   } catch (error) {
     return { evaluations: [], ...chapErrorFields(error) };
   }

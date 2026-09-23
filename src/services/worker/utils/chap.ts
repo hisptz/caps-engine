@@ -1,7 +1,6 @@
 import type {
   JobDescription,
   JobResponse,
-  MakePredictionRequest,
   PredictionResultData,
   PredictionSetupRead,
   RunPredictionSetupRequest,
@@ -60,25 +59,6 @@ export async function runPredictionSetup(
       const hint = RUN_ERROR_HINTS[status] ?? "";
       throw new Error(
         `CHAP rejected prediction setup run (${status}): ${detail}${hint ? ` — ${hint}` : ""}`,
-        { cause: err }
-      );
-    }
-    throw err;
-  }
-}
-
-/**
- * POST /analytics/make-prediction
- * Submits a prediction job and returns the job ID.
- */
-export async function triggerPrediction(request: MakePredictionRequest): Promise<JobResponse> {
-  try {
-    const response = await chapClient.post<JobResponse>("v1/analytics/make-prediction", request);
-    return response.data;
-  } catch (err) {
-    if (axios.isAxiosError(err) && err.response) {
-      throw new Error(
-        `CHAP rejected prediction request (${err.response.status}): ${JSON.stringify(err.response.data)}`,
         { cause: err }
       );
     }

@@ -1,5 +1,4 @@
 import type { StepContext } from "@/services/worker/types/service.ts";
-import type { LegacyPredictionTriggerConfig } from "@/services/worker/services/handlers/predictionTrigger/schemas/config.ts";
 import type { PredictionSetupRead } from "@/services/worker/types/chap.ts";
 import { PeriodTypeEnum } from "@hisptz/dhis2-utils";
 import { DateTime, Interval } from "luxon";
@@ -26,68 +25,6 @@ function getDurationLabel(type: PeriodTypeEnum) {
     default:
       throw Error(`Unsupported period type: ${type}`);
   }
-}
-
-/*
- * Gets the periods based on the configuration provided. It generates the periods from the last period (e.g if type is Monthly then the last month)
- * to the start date n years ago where n is the numberPreviousYearsToInclude
- *
- * input:
- * config: PredictionTriggerConfig["period"]
- * ctx: StepContext
- *
- * config contains:
- * type: PeriodTypeCategory
- * numberPreviousYearsToInclude: number
- *
- * output:
- * periods: string[]
- * */
-
-/*
- * Gets the periods based on the configuration provided. It generates the periods from the last period (e.g if type is Monthly then the last month)
- * to the start date n years ago where n is the numberPreviousYearsToInclude
- *
- * input:
- * config: PredictionTriggerConfig["period"]
- * ctx: StepContext
- *
- * config contains:
- * type: PeriodTypeCategory
- * numberPreviousYearsToInclude: number
- *
- * output:
- * periods: string[]
- * */
-async function getDatasetPeriod({
-  config,
-  ctx,
-}: {
-  config: LegacyPredictionTriggerConfig["period"];
-  ctx: StepContext;
-}) {
-  await ctx.log("INFO", "Getting dataset period");
-  const { type, numberPreviousYearsToInclude, periodOffset } = config;
-  const durationLabel = getDurationLabel(type);
-  const endDate = DateTime.now().minus({ [durationLabel]: periodOffset });
-  const startDate = endDate.minus({ years: numberPreviousYearsToInclude });
-  const interval = Interval.fromDateTimes(startDate, endDate);
-
-  if (!interval.isValid) {
-    await ctx.log("ERROR", "Invalid period configuration");
-    throw new Error("Invalid period configuration");
-  }
-
-  if (interval.splitBy({ year: 1 }).length < 2) {
-    await ctx.log("ERROR", "Period configuration must span at least two years");
-    throw new Error("Period configuration must span at least two years");
-  }
-
-  return interval
-    .splitBy({
-      [durationLabel]: 1,
-    })
-    .map((interval) => generatePeriodId(interval, type));
 }
 
 type ProvidedData = {
@@ -171,20 +108,6 @@ async function fetchObservations({
   });
 }
 
-export async function getDatasetForPrediction({
-  config,
-  ctx,
-}: {
-  ctx: StepContext;
-  config: LegacyPredictionTriggerConfig;
-}): Promise<ProvidedData[]> {
-  await ctx.log("INFO", "Getting dataset to be used for the prediction");
-  const periods = await getDatasetPeriod({ ctx, config: config.period });
-  const { levels, ids } = config.orgUnit;
-  const orgUnits = [...(ids ?? []), ...(levels ?? []).map((level) => `LEVEL-${level}`)];
-  return fetchObservations({ ctx, periods, orgUnits, dataSources: config.dataSources });
-}
-
 export function toPeriodType(periodType: string | null | undefined): PeriodTypeEnum {
   switch (periodType?.toLowerCase()) {
     case "month":
@@ -231,21 +154,31 @@ export function getTrainingPeriods({
   startPeriod,
   periodType,
   periodOffset,
+  endPeriod,
   now = DateTime.now(),
 }: {
   startPeriod: string;
   periodType: PeriodTypeEnum;
-  periodOffset: number;
+  periodOffset?: number;
+  endPeriod?: string;
   now?: DateTime;
 }): string[] {
   const durationLabel = getDurationLabel(periodType);
   const unit = periodType === PeriodTypeEnum.MONTHLY ? "month" : "week";
   const start = parsePeriodId(startPeriod, periodType);
-  const end = now.minus({ [durationLabel]: periodOffset }).startOf(unit);
+
+  if (periodOffset === undefined && endPeriod === undefined) {
+    throw new Error("The training period needs either a period offset or an end period");
+  }
+
+  const end =
+    periodOffset !== undefined
+      ? now.minus({ [durationLabel]: periodOffset }).startOf(unit)
+      : parsePeriodId(endPeriod as string, periodType);
 
   if (end < start) {
     throw new Error(
-      `Training period ends before the setup's start period (${startPeriod}); lower the period offset.`
+      `Training period ends before the setup's start period (${startPeriod}); pick a later end period.`
     );
   }
 
@@ -267,10 +200,12 @@ export async function getDatasetForPredictionSetup({
   ctx,
   setup,
   periodOffset,
+  endPeriod,
 }: {
   ctx: StepContext;
   setup: PredictionSetupRead;
-  periodOffset: number;
+  periodOffset?: number;
+  endPeriod?: string;
 }): Promise<{ observations: ProvidedData[]; periods: string[] }> {
   await ctx.log("INFO", "Getting dataset to be used for the prediction");
 
@@ -293,6 +228,7 @@ export async function getDatasetForPredictionSetup({
     startPeriod: setup.startPeriod,
     periodType,
     periodOffset,
+    endPeriod,
   });
 
   await ctx.log("INFO", "Resolved training period from the prediction setup", {

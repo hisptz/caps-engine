@@ -76,16 +76,10 @@ describe("handler catalog", () => {
 
 describe("handler config JSON Schema round-trip", () => {
   const predictionTriggerValid = {
-    modelId: "model-1",
+    backtestId: 2,
+    predictionSetupId: 3,
     name: "run-1",
-    orgUnit: { ids: ["ou1"] },
-    period: {
-      type: "MONTHLY",
-      periodOffset: 0,
-      numberPreviousYearsToInclude: 2,
-      numberOfPeriodsToGenerate: 3,
-    },
-    dataSources: [{ covariate: "rain", dataElementId: "abcdefghijk" }],
+    period: { endPeriod: "202608", numberOfPeriodsToGenerate: 3 },
   };
 
   const thresholdValid = {
