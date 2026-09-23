@@ -1,5 +1,5 @@
 import { HANDLERS, type Handlers } from "@/services/worker/constants/handlers.ts";
-import type { ZodObject } from "zod";
+import type { ZodType } from "zod";
 import { z } from "zod";
 
 /** JSON Schema object returned on GET /handlers (draft-2020-12). */
@@ -19,16 +19,16 @@ export type HandlerDescriptor = {
 
 const JSON_SCHEMA_TARGET = "draft-2020-12" as const;
 
-function zodToJsonSchema(schema: ZodObject): HandlerJsonSchema {
+function zodToJsonSchema(schema: ZodType): HandlerJsonSchema {
   return z.toJSONSchema(schema, { target: JSON_SCHEMA_TARGET }) as HandlerJsonSchema;
 }
 
-function getRegistryConfigSchema(key: string): ZodObject | undefined {
+function getRegistryConfigSchema(key: string): ZodType | undefined {
   const entry = HANDLERS.get(key as Handlers);
   return entry?.schemas.config;
 }
 
-function getRegistryContextSchema(key: string): ZodObject | undefined {
+function getRegistryContextSchema(key: string): ZodType | undefined {
   const entry = HANDLERS.get(key as Handlers);
   return entry?.schemas.context;
 }

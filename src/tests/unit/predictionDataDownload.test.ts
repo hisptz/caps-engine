@@ -12,9 +12,10 @@ function stubBunForTests() {
 
 vi.mock("@/services/worker/utils/chap.ts", () => ({
   getPredictionResult: vi.fn(),
+  getPredictionSetup: vi.fn(),
 }));
 
-import { getPredictionResult } from "@/services/worker/utils/chap.ts";
+import { getPredictionResult, getPredictionSetup } from "@/services/worker/utils/chap.ts";
 import { predictionDataDownload } from "@/services/worker/services/handlers/predictionDataDownload/index.ts";
 import { dhis2DataUpload } from "@/services/worker/services/handlers/dhis2DataUpload/index.ts";
 import { postDataValueSet } from "@/services/worker/utils/dhis2.ts";
@@ -24,6 +25,7 @@ vi.mock("@/services/worker/utils/dhis2.ts", () => ({
 }));
 
 const mockGetPredictionResult = vi.mocked(getPredictionResult);
+const mockGetPredictionSetup = vi.mocked(getPredictionSetup);
 const mockPostDataValueSet = vi.mocked(postDataValueSet);
 
 function baseHandlerConfig(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -94,7 +96,10 @@ describe("predictionDataDownload", () => {
       count: number;
     };
 
-    expect(mockGetPredictionResult).toHaveBeenCalledWith({ resultId: "pred-entry-42" });
+    expect(mockGetPredictionResult).toHaveBeenCalledWith({
+      resultId: "pred-entry-42",
+      quantiles: expect.arrayContaining(["0.5"]),
+    });
     expect(mockBunWrite).toHaveBeenCalledOnce();
     const [, json] = mockBunWrite.mock.calls[0]!;
     const payload = JSON.parse(json as string) as {
@@ -127,7 +132,7 @@ describe("predictionDataDownload", () => {
       handlerConfig: baseHandlerConfig(),
       tasks: { startTask: vi.fn().mockResolvedValue(taskHandle) },
     });
-    await expect(predictionDataDownload.execute(ctx)).rejects.toThrow(/Unmapped CHAP dataElement/);
+    await expect(predictionDataDownload.execute(ctx)).rejects.toThrow(/Unmapped CHAP quantile/);
     expect(taskHandle.fail).toHaveBeenCalled();
   });
 
@@ -202,5 +207,123 @@ describe("dhis2DataUpload filename resolution", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+});
+
+describe("predictionDataDownload quantile mapping fallback", () => {
+  beforeEach(() => {
+    stubBunForTests();
+    vi.clearAllMocks();
+    mockBunWrite.mockResolvedValue(0);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function setupWithTargets(quantileTargets: Array<{ quantile: string; dataElementId: string }>) {
+    mockGetPredictionSetup.mockResolvedValue({
+      id: 3,
+      name: "1st Prediction Disease",
+      quantileTargets,
+    } as unknown as Awaited<ReturnType<typeof getPredictionSetup>>);
+  }
+
+  it("uses the prediction setup's quantile targets when the config has no mapping", async () => {
+    setupWithTargets([{ quantile: "0.5", dataElementId: "DE_FROM_SETUP" }]);
+    mockGetPredictionResult.mockResolvedValue([
+      { quantile: "0.5", orgUnit: "OU1", period: "202609", value: 12.4 },
+    ] as unknown as Awaited<ReturnType<typeof getPredictionResult>>);
+
+    const ctx = buildMockContext({
+      input: { ...pollOutput(), predictionSetupId: 3 },
+      handlerConfig: {},
+    });
+
+    await predictionDataDownload.execute(ctx);
+
+    expect(mockGetPredictionSetup).toHaveBeenCalledWith(3);
+    expect(mockGetPredictionResult).toHaveBeenCalledWith({
+      resultId: "pred-entry-42",
+      quantiles: ["0.5"],
+    });
+    const [, json] = mockBunWrite.mock.calls[0]!;
+    const payload = JSON.parse(json as string) as {
+      dataValues: { dataElement: string; value: string }[];
+    };
+    expect(payload.dataValues).toEqual([
+      { dataElement: "DE_FROM_SETUP", orgUnit: "OU1", period: "202609", value: "12" },
+    ]);
+  });
+
+  it("prefers an explicit config mapping over the setup's targets", async () => {
+    setupWithTargets([{ quantile: "0.5", dataElementId: "DE_FROM_SETUP" }]);
+    mockGetPredictionResult.mockResolvedValue([
+      { quantile: "0.5", orgUnit: "OU1", period: "202609", value: 1 },
+    ] as unknown as Awaited<ReturnType<typeof getPredictionResult>>);
+
+    const ctx = buildMockContext({
+      input: { ...pollOutput(), predictionSetupId: 3 },
+      handlerConfig: baseHandlerConfig(),
+    });
+
+    await predictionDataDownload.execute(ctx);
+
+    expect(mockGetPredictionSetup).not.toHaveBeenCalled();
+  });
+
+  it("fails clearly when there is neither a mapping nor a prediction setup", async () => {
+    const ctx = buildMockContext({ input: pollOutput(), handlerConfig: {} });
+    await expect(predictionDataDownload.execute(ctx)).rejects.toThrow(/no quantile mapping/);
+  });
+
+  it("translates the Modeling app's quantile names into the numbers CHAP answers with", async () => {
+    setupWithTargets([
+      { quantile: "median", dataElementId: "DE_MEDIAN" },
+      { quantile: "quantile_high", dataElementId: "DE_HIGH" },
+      { quantile: "outbreak_indicator", dataElementId: "DE_ALERT" },
+    ]);
+    mockGetPredictionResult.mockResolvedValue([
+      { quantile: 0.5, orgUnit: "OU1", period: "202609", value: 4.4 },
+      { quantile: 0.9, orgUnit: "OU1", period: "202609", value: 9.6 },
+    ] as unknown as Awaited<ReturnType<typeof getPredictionResult>>);
+
+    const ctx = buildMockContext({
+      input: { ...pollOutput(), predictionSetupId: 3 },
+      handlerConfig: {},
+    });
+
+    await predictionDataDownload.execute(ctx);
+
+    expect(mockGetPredictionResult).toHaveBeenCalledWith({
+      resultId: "pred-entry-42",
+      quantiles: ["0.5", "0.9"],
+    });
+    const [, json] = mockBunWrite.mock.calls[0]!;
+    const payload = JSON.parse(json as string) as {
+      dataValues: { dataElement: string; value: string }[];
+    };
+    expect(payload.dataValues.map((dv) => dv.dataElement)).toEqual(["DE_MEDIAN", "DE_HIGH"]);
+  });
+
+  it("fails when the setup has only targets that are not forecast quantiles", async () => {
+    setupWithTargets([{ quantile: "outbreak_indicator", dataElementId: "DE_ALERT" }]);
+    const ctx = buildMockContext({
+      input: { ...pollOutput(), predictionSetupId: 3 },
+      handlerConfig: {},
+    });
+    await expect(predictionDataDownload.execute(ctx)).rejects.toThrow(
+      /no forecast quantile targets/
+    );
+  });
+
+  it("fails when the setup itself has no quantile targets", async () => {
+    setupWithTargets([]);
+    const ctx = buildMockContext({
+      input: { ...pollOutput(), predictionSetupId: 3 },
+      handlerConfig: {},
+    });
+    await expect(predictionDataDownload.execute(ctx)).rejects.toThrow(
+      /no forecast quantile targets/
+    );
   });
 });

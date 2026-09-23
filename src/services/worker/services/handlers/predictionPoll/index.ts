@@ -29,12 +29,13 @@ const MAX_ATTEMPTS = 120;
  * { jobId: string }
  *
  * Output:
- * { jobId: string; status: string; result: string | null }
+ * { jobId: string; status: string; result: string | null; predictionSetupId: number | null }
  */
 export const predictionPoll: StepHandler = {
   async execute(ctx) {
-    const input = ctx.input as { jobId?: string };
+    const input = ctx.input as { jobId?: string; predictionSetupId?: number };
     const jobId = input?.jobId;
+    const predictionSetupId = input?.predictionSetupId ?? null;
 
     if (!jobId) {
       throw new Error("prediction-poll requires { jobId } from the previous step's output");
@@ -82,7 +83,12 @@ export const predictionPoll: StepHandler = {
         }
 
         const description = await getJobDescription(jobId).catch(() => null);
-        const result = { jobId, status, result: description?.result ?? null };
+        const result = {
+          jobId,
+          status,
+          result: description?.result ?? null,
+          predictionSetupId,
+        };
         await task.succeed(result);
         await ctx.log("INFO", "CHAP prediction job completed successfully", result);
         return result;

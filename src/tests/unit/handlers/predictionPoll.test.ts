@@ -38,6 +38,7 @@ describe("predictionPoll", () => {
       jobId: "job-1",
       status: "SUCCESS",
       result: "pred-42",
+      predictionSetupId: null,
     });
   });
 

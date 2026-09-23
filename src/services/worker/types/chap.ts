@@ -4,3 +4,5 @@ export type MakePredictionRequest = components["schemas"]["MakePredictionRequest
 export type JobResponse = components["schemas"]["JobResponse"];
 export type JobDescription = components["schemas"]["JobDescription"];
 export type PredictionResultData = components["schemas"]["PredictionEntry"];
+export type PredictionSetupRead = components["schemas"]["PredictionSetupRead"];
+export type RunPredictionSetupRequest = components["schemas"]["RunPredictionSetupRequest"];
