@@ -16,7 +16,7 @@ import {
   alertGenerationContextSchema,
 } from "@/services/worker/services/handlers/alertGeneration/schemas/config.ts";
 import { dhis2AnalyticsRunConfigSchema } from "@/services/worker/services/handlers/dhis2AnalyticsRun/schemas/config.ts";
-import type { ZodObject } from "zod";
+import type { ZodType } from "zod";
 
 export type HandlerRegistryEntry = {
   queueName: string;
@@ -24,8 +24,8 @@ export type HandlerRegistryEntry = {
   description: string;
   tags: string[];
   schemas: {
-    config?: ZodObject;
-    context?: ZodObject;
+    config?: ZodType;
+    context?: ZodType;
   };
 };
 

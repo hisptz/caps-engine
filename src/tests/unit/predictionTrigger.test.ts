@@ -1,0 +1,141 @@
+import { describe, it, expect } from "vitest";
+import { DateTime } from "luxon";
+import { PeriodTypeEnum } from "@hisptz/dhis2-utils";
+import {
+  getTrainingPeriods,
+  toPeriodType,
+} from "@/services/worker/services/handlers/predictionTrigger/utils/data.ts";
+import {
+  isLegacyPredictionTriggerConfig,
+  predictionTriggerConfigSchema,
+} from "@/services/worker/services/handlers/predictionTrigger/schemas/config.ts";
+
+const september2026 = DateTime.fromISO("2026-09-22T10:00:00");
+
+describe("toPeriodType", () => {
+  it("maps CHAP period types onto DHIS2 period types", () => {
+    expect(toPeriodType("month")).toBe(PeriodTypeEnum.MONTHLY);
+    expect(toPeriodType("week")).toBe(PeriodTypeEnum.WEEKLY);
+  });
+
+  it("rejects period types CAPS cannot generate", () => {
+    expect(() => toPeriodType("year")).toThrow(/Unsupported period type/);
+    expect(() => toPeriodType(null)).toThrow(/Unsupported period type/);
+  });
+});
+
+describe("getTrainingPeriods", () => {
+  it("ends on the previous period for the default offset of 1", () => {
+    const periods = getTrainingPeriods({
+      startPeriod: "202207",
+      periodType: PeriodTypeEnum.MONTHLY,
+      periodOffset: 1,
+      now: september2026,
+    });
+
+    expect(periods[0]).toBe("202207");
+    expect(periods.at(-1)).toBe("202608");
+    expect(periods).toHaveLength(50);
+  });
+
+  it("includes the current, incomplete period at offset 0", () => {
+    const periods = getTrainingPeriods({
+      startPeriod: "202207",
+      periodType: PeriodTypeEnum.MONTHLY,
+      periodOffset: 0,
+      now: september2026,
+    });
+
+    expect(periods.at(-1)).toBe("202609");
+  });
+
+  it("walks further back as the offset grows", () => {
+    const periods = getTrainingPeriods({
+      startPeriod: "202207",
+      periodType: PeriodTypeEnum.MONTHLY,
+      periodOffset: 3,
+      now: september2026,
+    });
+
+    expect(periods.at(-1)).toBe("202606");
+  });
+
+  it("supports weekly setups", () => {
+    const periods = getTrainingPeriods({
+      startPeriod: "2026W1",
+      periodType: PeriodTypeEnum.WEEKLY,
+      periodOffset: 1,
+      now: DateTime.fromISO("2026-02-05T10:00:00"),
+    });
+
+    expect(periods[0]).toBe("2026W1");
+    expect(periods.at(-1)).toBe("2026W5");
+  });
+
+  it("fails when the offset pushes the window before the start period", () => {
+    expect(() =>
+      getTrainingPeriods({
+        startPeriod: "202608",
+        periodType: PeriodTypeEnum.MONTHLY,
+        periodOffset: 6,
+        now: september2026,
+      })
+    ).toThrow(/ends before the setup's start period/);
+  });
+
+  it("rejects a start period it cannot read", () => {
+    expect(() =>
+      getTrainingPeriods({
+        startPeriod: "July 2022",
+        periodType: PeriodTypeEnum.MONTHLY,
+        periodOffset: 1,
+        now: september2026,
+      })
+    ).toThrow(/start period/);
+  });
+});
+
+describe("predictionTriggerConfigSchema", () => {
+  const setupConfig = {
+    backtestId: 2,
+    predictionSetupId: 3,
+    name: "1st Prediction Disease",
+    period: { periodOffset: 1, numberOfPeriodsToGenerate: 3 },
+  };
+
+  const legacyConfig = {
+    modelId: "chap_ewars_monthly",
+    name: "Dengue monthly",
+    orgUnit: { ids: ["OU1"] },
+    period: {
+      type: "MONTHLY",
+      periodOffset: 0,
+      numberPreviousYearsToInclude: 2,
+      numberOfPeriodsToGenerate: 3,
+    },
+    dataSources: [{ covariate: "rainfall", dataElementId: "nWPzi91bOBs" }],
+  };
+
+  it("accepts a prediction-setup config", () => {
+    const parsed = predictionTriggerConfigSchema.parse(setupConfig);
+    expect(isLegacyPredictionTriggerConfig(parsed)).toBe(false);
+  });
+
+  it("still accepts configs written before prediction setups", () => {
+    const parsed = predictionTriggerConfigSchema.parse(legacyConfig);
+    expect(isLegacyPredictionTriggerConfig(parsed)).toBe(true);
+  });
+
+  it("requires a run name on a prediction-setup config", () => {
+    expect(() => predictionTriggerConfigSchema.parse({ ...setupConfig, name: "" })).toThrow();
+  });
+
+  it("rejects a negative period offset", () => {
+    expect(() =>
+      predictionTriggerConfigSchema.parse({
+        ...setupConfig,
+        period: { periodOffset: -1, numberOfPeriodsToGenerate: 3 },
+      })
+    ).toThrow();
+  });
+});

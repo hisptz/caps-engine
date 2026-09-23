@@ -89,6 +89,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    volumes:
+      - caps_outputs:/tmp/caps-outputs
     restart: unless-stopped
     networks:
       - caps
@@ -118,6 +120,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    volumes:
+      - caps_outputs:/tmp/caps-outputs
     restart: unless-stopped
     networks:
       - caps
@@ -183,6 +187,7 @@ services:
 volumes:
   postgres_data:
   rabbitmq_data:
+  caps_outputs:
 
 networks:
   caps:

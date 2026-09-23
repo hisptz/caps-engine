@@ -92,6 +92,8 @@ services:
       caps_migrate:
         condition: service_completed_successfully
     restart: unless-stopped
+    volumes:
+      - caps_outputs:/tmp/caps-outputs
     networks:
       - caps
   # WARNING: Do not scale this service. Running more than one scheduler instance
@@ -144,6 +146,7 @@ volumes:
   postgres_data:
   rabbitmq_data:
   climate_data:
+  caps_outputs:
 
 networks:
   caps:

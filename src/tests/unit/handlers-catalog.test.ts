@@ -140,10 +140,12 @@ describe("handler config JSON Schema round-trip", () => {
     });
   }
 
-  it("prediction-data-download rejects empty mapping in source schema", () => {
-    expect(predictionDataDownloadConfigSchema.safeParse({ dataElementIds: {} }).success).toBe(
-      false
-    );
+  it("prediction-data-download allows an omitted mapping, which falls back to the setup's quantile targets", () => {
+    expect(predictionDataDownloadConfigSchema.safeParse({}).success).toBe(true);
+    expect(predictionDataDownloadConfigSchema.safeParse({ dataElementIds: {} }).success).toBe(true);
+    expect(
+      predictionDataDownloadConfigSchema.safeParse({ dataElementIds: { "0.5": "" } }).success
+    ).toBe(false);
   });
 
   it("climate-openeo-create round-trips valid structural config", () => {
