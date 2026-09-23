@@ -329,7 +329,7 @@ describe("MonitoringQueries.listExecutions", () => {
 
     const dates = result.executions.map((e) => e.createdAt.getTime());
     for (let i = 1; i < dates.length; i++) {
-      expect(dates[i - 1]).toBeGreaterThanOrEqual(dates[i]);
+      expect(dates[i - 1]).toBeGreaterThanOrEqual(dates[i]!);
     }
   });
 

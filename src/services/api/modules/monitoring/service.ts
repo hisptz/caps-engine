@@ -123,21 +123,20 @@ export class MonitoringService {
   }
 
   async replayDeadLetter(body: ReplayDeadLetterBody) {
-    const { executionId } = body;
-
-    const execution = await apiDb.pipelineExecution.findUnique({ where: { id: executionId } });
-    if (!execution) {
-      throw notFound("Execution not found", ApiErrorCode.EXECUTION_NOT_FOUND);
-    }
-
-    const messageBody = JSON.parse(execution.inputContext);
-    const targetQueue = messageBody.targetQueue;
+    const { targetQueue, messageBody, executionId } = body;
 
     if (!ALLOWED_DEAD_LETTER_QUEUES.includes(targetQueue)) {
       throw badRequest(
         `Invalid targetQueue. Allowed queues: ${ALLOWED_DEAD_LETTER_QUEUES.join(", ")}`,
         ApiErrorCode.VALIDATION_ERROR
       );
+    }
+
+    if (executionId) {
+      const execution = await apiDb.pipelineExecution.findUnique({ where: { id: executionId } });
+      if (!execution) {
+        throw notFound("Execution not found", ApiErrorCode.EXECUTION_NOT_FOUND);
+      }
     }
 
     replayDeadMessage(apiChannel(), targetQueue, messageBody);
