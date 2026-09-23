@@ -5,10 +5,7 @@ import {
   getTrainingPeriods,
   toPeriodType,
 } from "@/services/worker/services/handlers/predictionTrigger/utils/data.ts";
-import {
-  isLegacyPredictionTriggerConfig,
-  predictionTriggerConfigSchema,
-} from "@/services/worker/services/handlers/predictionTrigger/schemas/config.ts";
+import { predictionTriggerConfigSchema } from "@/services/worker/services/handlers/predictionTrigger/schemas/config.ts";
 
 const september2026 = DateTime.fromISO("2026-09-22T10:00:00");
 
@@ -83,6 +80,40 @@ describe("getTrainingPeriods", () => {
     ).toThrow(/ends before the setup's start period/);
   });
 
+  it("ends on the period picked on the step when there is no offset", () => {
+    const periods = getTrainingPeriods({
+      startPeriod: "202207",
+      periodType: PeriodTypeEnum.MONTHLY,
+      endPeriod: "202604",
+      now: september2026,
+    });
+
+    expect(periods[0]).toBe("202207");
+    expect(periods.at(-1)).toBe("202604");
+  });
+
+  it("lets a schedule's offset win over the period picked on the step", () => {
+    const periods = getTrainingPeriods({
+      startPeriod: "202207",
+      periodType: PeriodTypeEnum.MONTHLY,
+      periodOffset: 1,
+      endPeriod: "202604",
+      now: september2026,
+    });
+
+    expect(periods.at(-1)).toBe("202608");
+  });
+
+  it("refuses a training period with neither an offset nor an end period", () => {
+    expect(() =>
+      getTrainingPeriods({
+        startPeriod: "202207",
+        periodType: PeriodTypeEnum.MONTHLY,
+        now: september2026,
+      })
+    ).toThrow(/either a period offset or an end period/);
+  });
+
   it("rejects a start period it cannot read", () => {
     expect(() =>
       getTrainingPeriods({
@@ -100,34 +131,44 @@ describe("predictionTriggerConfigSchema", () => {
     backtestId: 2,
     predictionSetupId: 3,
     name: "1st Prediction Disease",
-    period: { periodOffset: 1, numberOfPeriodsToGenerate: 3 },
-  };
-
-  const legacyConfig = {
-    modelId: "chap_ewars_monthly",
-    name: "Dengue monthly",
-    orgUnit: { ids: ["OU1"] },
-    period: {
-      type: "MONTHLY",
-      periodOffset: 0,
-      numberPreviousYearsToInclude: 2,
-      numberOfPeriodsToGenerate: 3,
-    },
-    dataSources: [{ covariate: "rainfall", dataElementId: "nWPzi91bOBs" }],
+    period: { endPeriod: "202608", numberOfPeriodsToGenerate: 3 },
   };
 
   it("accepts a prediction-setup config", () => {
-    const parsed = predictionTriggerConfigSchema.parse(setupConfig);
-    expect(isLegacyPredictionTriggerConfig(parsed)).toBe(false);
+    expect(predictionTriggerConfigSchema.safeParse(setupConfig).success).toBe(true);
   });
 
-  it("still accepts configs written before prediction setups", () => {
-    const parsed = predictionTriggerConfigSchema.parse(legacyConfig);
-    expect(isLegacyPredictionTriggerConfig(parsed)).toBe(true);
+  it("rejects the old model-based config", () => {
+    expect(() =>
+      predictionTriggerConfigSchema.parse({
+        modelId: "chap_ewars_monthly",
+        name: "Dengue monthly",
+        orgUnit: { ids: ["OU1"] },
+        period: { type: "MONTHLY", periodOffset: 0, numberOfPeriodsToGenerate: 3 },
+        dataSources: [{ covariate: "rainfall", dataElementId: "nWPzi91bOBs" }],
+      })
+    ).toThrow();
   });
 
   it("requires a run name on a prediction-setup config", () => {
     expect(() => predictionTriggerConfigSchema.parse({ ...setupConfig, name: "" })).toThrow();
+  });
+
+  it("accepts a schedule's relative period offset", () => {
+    const parsed = predictionTriggerConfigSchema.parse({
+      ...setupConfig,
+      period: { periodOffset: 1, numberOfPeriodsToGenerate: 3 },
+    });
+    expect(parsed.period.periodOffset).toBe(1);
+  });
+
+  it("requires the training period to have an end period or an offset", () => {
+    expect(() =>
+      predictionTriggerConfigSchema.parse({
+        ...setupConfig,
+        period: { numberOfPeriodsToGenerate: 3 },
+      })
+    ).toThrow();
   });
 
   it("rejects a negative period offset", () => {

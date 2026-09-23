@@ -9,26 +9,14 @@ describe("validateHandlerContext", () => {
 
   it("accepts valid prediction-trigger context slice", () => {
     const result = validateHandlerContext("prediction-trigger", {
-      orgUnit: { ids: ["ou1"] },
-      period: {
-        type: "MONTHLY",
-        periodOffset: 0,
-        numberPreviousYearsToInclude: 2,
-        numberOfPeriodsToGenerate: 3,
-      },
+      period: { periodOffset: 1, numberOfPeriodsToGenerate: 3 },
     });
     expect(result.success).toBe(true);
   });
 
-  it("rejects invalid period type on prediction-trigger", () => {
+  it("rejects a non-numeric period offset on prediction-trigger", () => {
     const result = validateHandlerContext("prediction-trigger", {
-      orgUnit: { ids: ["ou1"] },
-      period: {
-        type: "INVALID",
-        periodOffset: 0,
-        numberPreviousYearsToInclude: 2,
-        numberOfPeriodsToGenerate: 3,
-      },
+      period: { periodOffset: "last", numberOfPeriodsToGenerate: 3 },
     });
     expect(result.success).toBe(false);
   });

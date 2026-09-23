@@ -6,16 +6,10 @@ import {
 } from "@/services/worker/utils/resolveEffectiveHandlerConfig.ts";
 
 const baseConfig = {
-  modelId: "model-1",
+  backtestId: 2,
+  predictionSetupId: 3,
   name: "run-1",
-  orgUnit: { ids: ["ou-config"] },
-  period: {
-    type: "MONTHLY" as const,
-    periodOffset: 0,
-    numberPreviousYearsToInclude: 2,
-    numberOfPeriodsToGenerate: 3,
-  },
-  dataSources: [{ covariate: "rain", dataElementId: "abcdefghijk" }],
+  period: { endPeriod: "202608", numberOfPeriodsToGenerate: 3 },
 };
 
 describe("extractStepContextOverride", () => {
@@ -39,7 +33,7 @@ describe("resolveEffectiveHandlerConfig", () => {
       pipelineContext: {},
       stepId: "step-1",
     });
-    expect(merged.orgUnit).toEqual({ ids: ["ou-config"] });
+    expect(merged).toEqual(baseConfig);
   });
 
   it("deep-merges context override onto handlerConfig", () => {
@@ -49,21 +43,18 @@ describe("resolveEffectiveHandlerConfig", () => {
       pipelineContext: {
         steps: {
           "step-1": {
-            orgUnit: { ids: ["ou-runtime"] },
-            period: {
-              type: "MONTHLY",
-              periodOffset: 1,
-              numberPreviousYearsToInclude: 2,
-              numberOfPeriodsToGenerate: 3,
-            },
+            period: { periodOffset: 1, numberOfPeriodsToGenerate: 6 },
           },
         },
       },
       stepId: "step-1",
     });
-    expect(merged.orgUnit).toEqual({ ids: ["ou-runtime"] });
-    expect(merged.period).toMatchObject({ periodOffset: 1 });
-    expect(merged.modelId).toBe("model-1");
+    expect(merged.period).toEqual({
+      endPeriod: "202608",
+      periodOffset: 1,
+      numberOfPeriodsToGenerate: 6,
+    });
+    expect(merged.predictionSetupId).toBe(3);
   });
 
   it("throws when context override is invalid", () => {
@@ -74,8 +65,7 @@ describe("resolveEffectiveHandlerConfig", () => {
         pipelineContext: {
           steps: {
             "step-1": {
-              orgUnit: { ids: ["ou1"] },
-              period: { type: "INVALID" },
+              period: { periodOffset: "last" },
             },
           },
         },
