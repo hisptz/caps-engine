@@ -15,7 +15,6 @@ import { schedulesModule } from "@/services/api/modules/schedules/index.ts";
 import { climateModule } from "@/services/api/modules/climate/index.ts";
 import { monitoringModule } from "@/services/api/modules/monitoring/index.ts";
 import { handlersModule } from "@/services/api/modules/handlers/index.ts";
-import { modelsModule } from "@/services/api/modules/models/index.ts";
 import { evaluationsModule } from "@/services/api/modules/evaluations/index.ts";
 import { systemModule } from "@/services/api/modules/system/index.ts";
 
@@ -52,7 +51,6 @@ const app = new Elysia()
   .use(climateModule)
   .use(monitoringModule)
   .use(handlersModule)
-  .use(modelsModule)
   .use(evaluationsModule)
   .use(systemModule);
 

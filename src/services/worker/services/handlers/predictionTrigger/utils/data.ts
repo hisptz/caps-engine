@@ -145,11 +145,6 @@ function parsePeriodId(periodId: string, type: PeriodTypeEnum): DateTime {
   return parsed.startOf("week");
 }
 
-/**
- * Builds the training window: every period from the setup's `startPeriod` up to
- * `periodOffset` periods back from today. Offset 0 ends on the current (incomplete)
- * period, 1 ends on the previous one.
- */
 export function getTrainingPeriods({
   startPeriod,
   periodType,
@@ -172,9 +167,9 @@ export function getTrainingPeriods({
   }
 
   const end =
-    periodOffset !== undefined
-      ? now.minus({ [durationLabel]: periodOffset }).startOf(unit)
-      : parsePeriodId(endPeriod as string, periodType);
+    endPeriod !== undefined
+      ? parsePeriodId(endPeriod, periodType)
+      : now.minus({ [durationLabel]: periodOffset as number }).startOf(unit);
 
   if (end < start) {
     throw new Error(

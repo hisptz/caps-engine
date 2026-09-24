@@ -36,25 +36,57 @@ describe("resolveEffectiveHandlerConfig", () => {
     expect(merged).toEqual(baseConfig);
   });
 
-  it("deep-merges context override onto handlerConfig", () => {
+  it("replaces the step's period with the context's", () => {
     const merged = resolveEffectiveHandlerConfig({
       handlerKey: "prediction-trigger",
       handlerConfig: baseConfig,
       pipelineContext: {
         steps: {
           "step-1": {
-            period: { periodOffset: 1, numberOfPeriodsToGenerate: 6 },
+            period: { endPeriod: "202610", numberOfPeriodsToGenerate: 6 },
           },
         },
       },
       stepId: "step-1",
     });
     expect(merged.period).toEqual({
-      endPeriod: "202608",
-      periodOffset: 1,
+      endPeriod: "202610",
       numberOfPeriodsToGenerate: 6,
     });
     expect(merged.predictionSetupId).toBe(3);
+  });
+
+  it("lets a schedule's offset replace the step's fixed end period", () => {
+    const merged = resolveEffectiveHandlerConfig({
+      handlerKey: "prediction-trigger",
+      handlerConfig: baseConfig,
+      pipelineContext: {
+        steps: {
+          "step-1": {
+            period: { periodOffset: 1, numberOfPeriodsToGenerate: 3 },
+          },
+        },
+      },
+      stepId: "step-1",
+    });
+    expect(merged.period).toEqual({ periodOffset: 1, numberOfPeriodsToGenerate: 3 });
+  });
+
+  it("deep-merges keys the handler does not replace", () => {
+    const merged = resolveEffectiveHandlerConfig({
+      handlerKey: "prediction-trigger",
+      handlerConfig: baseConfig,
+      pipelineContext: {
+        steps: {
+          "step-1": {
+            period: { endPeriod: "202610", numberOfPeriodsToGenerate: 6 },
+          },
+        },
+      },
+      stepId: "step-1",
+    });
+    expect(merged.name).toBe("run-1");
+    expect(merged.backtestId).toBe(2);
   });
 
   it("throws when context override is invalid", () => {
@@ -65,7 +97,7 @@ describe("resolveEffectiveHandlerConfig", () => {
         pipelineContext: {
           steps: {
             "step-1": {
-              period: { periodOffset: "last" },
+              period: { endPeriod: "" },
             },
           },
         },

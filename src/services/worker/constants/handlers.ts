@@ -27,6 +27,7 @@ export type HandlerRegistryEntry = {
     config?: ZodType;
     context?: ZodType;
   };
+  contextReplaces?: string[];
 };
 
 export enum Handlers {
@@ -92,6 +93,7 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
         config: predictionTriggerConfigSchema,
         context: predictionTriggerContextSchema,
       },
+      contextReplaces: ["period"],
     },
   ],
   [

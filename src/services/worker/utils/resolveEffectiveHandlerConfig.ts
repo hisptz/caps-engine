@@ -2,6 +2,7 @@ import { merge } from "lodash-es";
 import {
   formatHandlerConfigIssues,
   formatHandlerContextIssues,
+  getHandlerContextReplaceKeys,
   validateHandlerConfig,
   validateHandlerContext,
 } from "@/shared/handlers/catalog.ts";
@@ -33,7 +34,8 @@ export class EffectiveHandlerConfigError extends Error {
 
 /**
  * Merges pipeline execution context step overrides onto static handlerConfig.
- * Context wins on conflicts (deep merge). Validates override and merged config.
+ * Context wins on conflicts (deep merge), except for the handler's `contextReplaces` keys,
+ * which the context replaces whole. Validates override and merged config.
  */
 export function resolveEffectiveHandlerConfig(args: {
   handlerKey: string;
@@ -52,8 +54,15 @@ export function resolveEffectiveHandlerConfig(args: {
     }
   }
 
-  const merged =
-    override !== undefined && Object.keys(override).length > 0 ? merge({}, base, override) : base;
+  let merged = base;
+  if (override !== undefined && Object.keys(override).length > 0) {
+    merged = merge({}, base, override);
+    for (const key of getHandlerContextReplaceKeys(args.handlerKey)) {
+      if (key in override) {
+        merged[key] = override[key];
+      }
+    }
+  }
 
   const configResult = validateHandlerConfig(args.handlerKey, merged);
   if (!configResult.success) {
