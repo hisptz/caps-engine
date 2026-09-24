@@ -33,6 +33,11 @@ function getRegistryContextSchema(key: string): ZodType | undefined {
   return entry?.schemas.context;
 }
 
+/** Context keys that replace the handler config value whole rather than merging into it. */
+export function getHandlerContextReplaceKeys(handlerKey: string): string[] {
+  return HANDLERS.get(handlerKey as Handlers)?.contextReplaces ?? [];
+}
+
 export function hasHandlerContextSchema(handlerKey: string): boolean {
   return getRegistryContextSchema(handlerKey) !== undefined;
 }

@@ -92,7 +92,7 @@ describe("getTrainingPeriods", () => {
     expect(periods.at(-1)).toBe("202604");
   });
 
-  it("lets a schedule's offset win over the period picked on the step", () => {
+  it("lets an end period picked for a run win over an offset left on the step", () => {
     const periods = getTrainingPeriods({
       startPeriod: "202207",
       periodType: PeriodTypeEnum.MONTHLY,
@@ -101,7 +101,7 @@ describe("getTrainingPeriods", () => {
       now: september2026,
     });
 
-    expect(periods.at(-1)).toBe("202608");
+    expect(periods.at(-1)).toBe("202604");
   });
 
   it("refuses a training period with neither an offset nor an end period", () => {
