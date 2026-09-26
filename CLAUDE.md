@@ -133,7 +133,7 @@ interface StepHandler {
 
 `StepContext` (`src/services/worker/types/service.ts`) provides the step definition, shared pipeline context (JSON passed between steps), sub-task reporting (`ctx.tasks`), and a `ctx.log()` method that writes to `ExecutionLog`. `src/shared/handlers/catalog.ts` converts each handler's Zod config/context schemas to JSON Schema for the API's handler-catalog endpoint.
 
-Current handlers (see `Handlers` enum): climate acquisition via openEO (`climate-openeo-{create,poll,download}`), CHAP predictions (`prediction-{trigger,poll,data-download}`), and DHIS2 import (`dhis2-data-upload`, `dhis2-analytics-run`, `threshold-generation`, `alert-generation`, `event-data-upload`).
+Current handlers (see `Handlers` enum): climate dataset freshness (`open-climate-service-sync`), climate acquisition via openEO (`climate-openeo-{create,poll,download}`), CHAP predictions (`prediction-{trigger,poll,data-download}`), and DHIS2 import (`dhis2-data-upload`, `dhis2-analytics-run`, `threshold-generation`, `alert-generation`, `event-data-upload`).
 
 ### Key Files
 
