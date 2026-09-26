@@ -1,3 +1,4 @@
+export * from "./openClimateServiceSync";
 export * from "./climateOpenEoCreate";
 export * from "./climateOpenEoPoll";
 export * from "./climateOpenEoDownload";

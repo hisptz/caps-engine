@@ -15,6 +15,8 @@ import {
   alertGenerationConfigSchema,
   alertGenerationContextSchema,
 } from "@/services/worker/services/handlers/alertGeneration/schemas/config.ts";
+import { openClimateServiceSyncConfigSchema } from "@/services/worker/services/handlers/openClimateServiceSync/schemas/config.ts";
+import { dhis2DataUploadConfigSchema } from "@/services/worker/services/handlers/dhis2DataUpload/schemas/config.ts";
 import { dhis2AnalyticsRunConfigSchema } from "@/services/worker/services/handlers/dhis2AnalyticsRun/schemas/config.ts";
 import type { ZodType } from "zod";
 
@@ -31,6 +33,7 @@ export type HandlerRegistryEntry = {
 };
 
 export enum Handlers {
+  OPEN_CLIMATE_SERVICE_SYNC = "open-climate-service-sync",
   CLIMATE_OPENEO_CREATE = "climate-openeo-create",
   CLIMATE_OPENEO_POLL = "climate-openeo-poll",
   CLIMATE_OPENEO_DOWNLOAD = "climate-openeo-download",
@@ -48,6 +51,18 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
   Handlers,
   HandlerRegistryEntry
 >([
+  [
+    Handlers.OPEN_CLIMATE_SERVICE_SYNC,
+    {
+      queueName: "step.open-climate-service-sync",
+      displayName: "Open Climate Service Sync",
+      description: "Bring Open Climate Service datasets up to date before the pipeline reads them",
+      tags: ["climate", "sync"],
+      schemas: {
+        config: openClimateServiceSyncConfigSchema,
+      },
+    },
+  ],
   [
     Handlers.CLIMATE_OPENEO_CREATE,
     {
@@ -125,7 +140,9 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       displayName: "DHIS2 Data Upload",
       description: "Uploads data from a file to DHIS2",
       tags: ["dhis2"],
-      schemas: {},
+      schemas: {
+        config: dhis2DataUploadConfigSchema,
+      },
     },
   ],
   [
