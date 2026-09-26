@@ -323,7 +323,7 @@ export class MonitoringQueries {
 
     const rows = await this.prisma.$queryRaw<{ error_message: string; occurrence_count: bigint }[]>`
       SELECT
-        "errorMessage",
+        "errorMessage" AS error_message,
         COUNT(*) AS occurrence_count
       FROM step_executions
       WHERE status = 'FAILED'

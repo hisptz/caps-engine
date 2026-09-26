@@ -4,6 +4,7 @@ import { env } from "@/shared/utils/env.ts";
 import path from "node:path";
 import type { DataValueSet, ImportSummary } from "@/services/worker/types/data.ts";
 import { postDataValueSet } from "@/services/worker/utils/dhis2.ts";
+import { groupConflicts, StepError } from "@/shared/utils/error.ts";
 import { dhis2DataUploadConfigSchema } from "@/services/worker/services/handlers/dhis2DataUpload/schemas/config.ts";
 
 /**
@@ -79,12 +80,15 @@ export const dhis2DataUpload: StepHandler = {
       throw error;
     }
 
-    const conflicts = summary.conflicts?.map((c) => `${c.object}: ${c.value}`) ?? [];
+    const conflicts = summary.conflicts ?? [];
 
     if (summary.status === "ERROR") {
-      const error = new Error(
-        `DHIS2 data value import failed with status ERROR${conflicts.length ? `: ${conflicts.join("; ")}` : ""}`
-      );
+      const error = new StepError("DHIS2 rejected the data value import", {
+        source: "dhis2",
+        description: summary.description,
+        totalConflicts: conflicts.length,
+        conflicts: groupConflicts(conflicts),
+      });
       await task.fail(error);
       throw error;
     }
@@ -92,7 +96,8 @@ export const dhis2DataUpload: StepHandler = {
     if (conflicts.length > 0) {
       await ctx.log("WARN", "DHIS2 data value import completed with conflicts", {
         status: summary.status,
-        conflicts,
+        totalConflicts: conflicts.length,
+        conflicts: groupConflicts(conflicts),
       });
     }
 

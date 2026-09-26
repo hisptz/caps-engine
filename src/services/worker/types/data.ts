@@ -21,6 +21,7 @@ export interface DataValueSet {
 }
 export interface ImportSummary {
   status: string;
+  description?: string;
   importOptions?: Record<string, unknown>;
   importCount?: {
     imported: number;

@@ -19,6 +19,7 @@ import { getPredictionResult, getPredictionSetup } from "@/services/worker/utils
 import { predictionDataDownload } from "@/services/worker/services/handlers/predictionDataDownload/index.ts";
 import { dhis2DataUpload } from "@/services/worker/services/handlers/dhis2DataUpload/index.ts";
 import { postDataValueSet } from "@/services/worker/utils/dhis2.ts";
+import { StepError } from "@/shared/utils/error.ts";
 
 vi.mock("@/services/worker/utils/dhis2.ts", () => ({
   postDataValueSet: vi.fn(),
@@ -240,7 +241,15 @@ describe("dhis2DataUpload filename resolution", () => {
     });
 
     const ctx = buildMockContext({ input: { filename: "f.json" }, handlerConfig: {} });
-    await expect(dhis2DataUpload.execute(ctx)).rejects.toThrow(/de: Data element not found/);
+    const error = await dhis2DataUpload.execute(ctx).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(StepError);
+    expect((error as StepError).message).toBe("DHIS2 rejected the data value import");
+    expect((error as StepError).details).toMatchObject({
+      source: "dhis2",
+      totalConflicts: 1,
+      conflicts: [{ value: "Data element not found", count: 1, objects: ["de"] }],
+    });
   });
 
   it("returns real counts and logs conflicts on WARNING", async () => {
@@ -260,7 +269,10 @@ describe("dhis2DataUpload filename resolution", () => {
     expect(ctx.log).toHaveBeenCalledWith(
       "WARN",
       expect.stringMatching(/conflicts/),
-      expect.objectContaining({ conflicts: ["ou: Org unit not in hierarchy"] })
+      expect.objectContaining({
+        totalConflicts: 1,
+        conflicts: [{ value: "Org unit not in hierarchy", count: 1, objects: ["ou"] }],
+      })
     );
   });
 
