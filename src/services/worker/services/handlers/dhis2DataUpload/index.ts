@@ -4,7 +4,7 @@ import { env } from "@/shared/utils/env.ts";
 import path from "node:path";
 import type { DataValueSet, ImportSummary } from "@/services/worker/types/data.ts";
 import { postDataValueSet } from "@/services/worker/utils/dhis2.ts";
-import { AxiosError } from "axios";
+import { dhis2DataUploadConfigSchema } from "@/services/worker/services/handlers/dhis2DataUpload/schemas/config.ts";
 
 /**
  * Handler: dhis2-data-upload
@@ -15,11 +15,19 @@ import { AxiosError } from "axios";
  * Requires ctx.input.filename — basename under OUTPUTS_DIR from the previous step
  * (e.g. threshold-generation or prediction-data-download).
  *
+ * Config: { importStrategy } — CREATE_AND_UPDATE (default), CREATE or UPDATE.
+ *
  * Output:
  * { status: string; imported: number; updated: number; ignored: number; deleted: number }
  */
 export const dhis2DataUpload: StepHandler = {
   async execute(ctx) {
+    const parsed = dhis2DataUploadConfigSchema.safeParse(ctx.handlerConfig ?? {});
+    if (!parsed.success) {
+      throw new Error(`Invalid dhis2-data-upload handlerConfig: ${parsed.error.message}`);
+    }
+    const { importStrategy } = parsed.data;
+
     const input = ctx.input as { filename?: string } | undefined;
     const filename = input?.filename;
 
@@ -35,6 +43,7 @@ export const dhis2DataUpload: StepHandler = {
 
     const task = await ctx.tasks.startTask("upload-data-value-set", {
       filePath,
+      importStrategy,
     });
 
     let payload: DataValueSet;
@@ -58,34 +67,33 @@ export const dhis2DataUpload: StepHandler = {
     await ctx.log("INFO", "Uploading data values to DHIS2", {
       filePath,
       count: payload.dataValues.length,
+      importStrategy,
     });
 
-    let summary;
+    let summary: ImportSummary;
     try {
-      summary = await postDataValueSet({ payload, ctx });
+      summary = await postDataValueSet({ payload, ctx, importStrategy });
     } catch (err) {
-      if (err instanceof AxiosError) {
-        if (err.response?.status === 409) {
-          summary = err.response.data as ImportSummary;
-          await task.fail(err);
-        } else {
-          await task.fail(err);
-          throw err;
-        }
-      } else {
-        const error = err instanceof Error ? err : new Error(String(err));
-        await task.fail(error);
-        throw error;
-      }
+      const error = err instanceof Error ? err : new Error(String(err));
+      await task.fail(error);
+      throw error;
     }
 
+    const conflicts = summary.conflicts?.map((c) => `${c.object}: ${c.value}`) ?? [];
+
     if (summary.status === "ERROR") {
-      const conflicts = summary.conflicts?.map((c) => `${c.object}: ${c.value}`).join("; ");
       const error = new Error(
-        `DHIS2 data value import failed with status ERROR${conflicts ? `: ${conflicts}` : ""}`
+        `DHIS2 data value import failed with status ERROR${conflicts.length ? `: ${conflicts.join("; ")}` : ""}`
       );
       await task.fail(error);
       throw error;
+    }
+
+    if (conflicts.length > 0) {
+      await ctx.log("WARN", "DHIS2 data value import completed with conflicts", {
+        status: summary.status,
+        conflicts,
+      });
     }
 
     const counts = summary.importCount ?? {

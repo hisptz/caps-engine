@@ -5,6 +5,7 @@ import type { StepContext } from "@/services/worker/types/service.ts";
 import { chunk, groupBy } from "lodash-es";
 import { PeriodUtility } from "@hisptz/dhis2-utils";
 import { AxiosError } from "axios";
+import type { DataValueImportStrategy } from "@/services/worker/services/handlers/dhis2DataUpload/schemas/config.ts";
 
 export type TrackerImportStrategy = "CREATE" | "UPDATE" | "CREATE_AND_UPDATE" | "DELETE";
 
@@ -47,32 +48,52 @@ export async function postTrackerEvents({
 }
 
 /**
+ * DHIS2 2.38+ wraps the import summary in a WebMessage envelope
+ * (`{ httpStatus, status, message, response: ImportSummary }`); older versions
+ * return the ImportSummary directly. Accept both shapes.
+ */
+export function unwrapImportSummary(data: unknown): ImportSummary {
+  const inner = (data as { response?: unknown } | null)?.response;
+  if (
+    inner &&
+    typeof inner === "object" &&
+    ((inner as { responseType?: string }).responseType === "ImportSummary" ||
+      "importCount" in inner)
+  ) {
+    return inner as ImportSummary;
+  }
+  return data as ImportSummary;
+}
+
+/**
  * POST /dataValueSets
  * Imports a set of aggregate data values into DHIS2.
+ *
+ * A 409 from DHIS2 still carries an import summary (status ERROR plus conflicts),
+ * so it is returned rather than thrown; the caller decides how to fail.
  */
 export async function postDataValueSet({
   payload,
   ctx,
+  importStrategy = "CREATE_AND_UPDATE",
 }: {
   payload: DataValueSet;
   ctx: StepContext;
+  importStrategy?: DataValueImportStrategy;
 }): Promise<ImportSummary> {
   try {
-    const response = await dhis2RestClient.post<ImportSummary>("/dataValueSets", payload);
-    return response.data;
+    const response = await dhis2RestClient.post<unknown>("/dataValueSets", payload, {
+      params: { importStrategy },
+    });
+    return unwrapImportSummary(response.data);
   } catch (error) {
+    if (error instanceof AxiosError && error.response?.status === 409 && error.response.data) {
+      return unwrapImportSummary(error.response.data);
+    }
     await ctx.log(
       "ERROR",
       `Failed to upload data values: ${error instanceof Error ? error.message : "Unknown Error"}`
     );
-    if (error instanceof AxiosError) {
-      if (error.response?.status === 409) {
-        await ctx.log(
-          "INFO",
-          `Conflict error occurred during data upload. ${JSON.stringify(error.response?.data)}`
-        );
-      }
-    }
     throw error;
   }
 }
