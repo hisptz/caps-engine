@@ -12,16 +12,18 @@ import { predictionTriggerConfigSchema } from "@/services/worker/services/handle
 import { thresholdGenerationConfigSchema } from "@/services/worker/services/handlers/thresholdGeneration/schemas/config.ts";
 import { alertGenerationConfigSchema } from "@/services/worker/services/handlers/alertGeneration/schemas/config.ts";
 import { predictionDataDownloadConfigSchema } from "@/services/worker/services/handlers/predictionDataDownload/schemas/config.ts";
+import { dhis2DataUploadConfigSchema } from "@/services/worker/services/handlers/dhis2DataUpload/schemas/config.ts";
 import { dhis2AnalyticsRunConfigSchema } from "@/services/worker/services/handlers/dhis2AnalyticsRun/schemas/config.ts";
 
 describe("handler catalog", () => {
   it("lists all registered handlers with display metadata", () => {
     const handlers = listHandlerDescriptors();
-    expect(handlers).toHaveLength(11);
+    expect(handlers).toHaveLength(12);
     const keys = handlers.map((h) => h.key).sort();
     expect(keys).toEqual(
       [
         "alert-generation",
+        "open-climate-service-sync",
         "climate-openeo-create",
         "climate-openeo-download",
         "climate-openeo-poll",
@@ -114,6 +116,11 @@ describe("handler config JSON Schema round-trip", () => {
         thresholdDataElementId: "DE_THRESHOLD",
         valueDataElementIds: ["DE_VALUE"],
       },
+    },
+    {
+      name: "dhis2-data-upload",
+      schema: dhis2DataUploadConfigSchema,
+      valid: { importStrategy: "CREATE" },
     },
     {
       name: "dhis2-analytics-run",

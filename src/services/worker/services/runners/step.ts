@@ -18,6 +18,7 @@ import type { InputJsonValue } from "@prisma/client/runtime/client";
 import { SpanStatusCode } from "@opentelemetry/api";
 import { tracer, stepExecutionCounter, stepDurationHistogram } from "@/shared/telemetry/index.ts";
 import { logger } from "@/shared/utils";
+import { toErrorRecord } from "@/shared/utils/error.ts";
 import { resolveEffectiveHandlerConfig } from "@/services/worker/utils/resolveEffectiveHandlerConfig.ts";
 import {
   parseStepSnapshot,
@@ -95,8 +96,7 @@ export function createTaskReporter(
             where: { id: taskExecution.id },
             data: {
               status: TaskExecutionStatus.FAILED,
-              errorMessage: error.message,
-              errorStack: error.stack,
+              ...errorColumns(error),
               finishedAt: new Date(),
             },
           });
@@ -104,6 +104,11 @@ export function createTaskReporter(
       };
     },
   };
+}
+
+export function errorColumns(err: Error) {
+  const { errorMessage, errorStack, errorDetails } = toErrorRecord(err);
+  return { errorMessage, errorStack, errorDetails: errorDetails as InputJsonValue | undefined };
 }
 
 function createStepLogger(
@@ -356,8 +361,7 @@ export class StepRunner {
           where: { id: stepExecution.id },
           data: {
             status: StepExecutionStatus.FAILED,
-            errorMessage: err.message,
-            errorStack: err.stack,
+            ...errorColumns(err),
             finishedAt: new Date(),
           },
         });

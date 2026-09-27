@@ -63,6 +63,7 @@ model StepExecution {
 
   errorMessage String?
   errorStack   String?
+  errorDetails Json?
 
   // Set once when the coordinator has processed this attempt's result
   resultProcessedAt DateTime?
@@ -140,6 +141,7 @@ model TaskExecution {
 
   errorMessage String?
   errorStack   String?
+  errorDetails Json?
 
   startedAt  DateTime?
   finishedAt DateTime?

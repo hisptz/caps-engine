@@ -19,6 +19,7 @@ import { getPredictionResult, getPredictionSetup } from "@/services/worker/utils
 import { predictionDataDownload } from "@/services/worker/services/handlers/predictionDataDownload/index.ts";
 import { dhis2DataUpload } from "@/services/worker/services/handlers/dhis2DataUpload/index.ts";
 import { postDataValueSet } from "@/services/worker/utils/dhis2.ts";
+import { StepError } from "@/shared/utils/error.ts";
 
 vi.mock("@/services/worker/utils/dhis2.ts", () => ({
   postDataValueSet: vi.fn(),
@@ -180,12 +181,99 @@ describe("dhis2DataUpload filename resolution", () => {
     );
   });
 
+  it("defaults importStrategy to CREATE_AND_UPDATE when config omits it", async () => {
+    mockFileJson.mockResolvedValue({
+      dataValues: [{ dataElement: "de", period: "202501", orgUnit: "ou", value: "1" }],
+    });
+
+    const ctx = buildMockContext({
+      input: { filename: "from-prev-step.json" },
+      handlerConfig: {},
+    });
+    await dhis2DataUpload.execute(ctx);
+
+    expect(mockPostDataValueSet).toHaveBeenCalledWith(
+      expect.objectContaining({ importStrategy: "CREATE_AND_UPDATE" })
+    );
+  });
+
+  it("passes the configured importStrategy to DHIS2", async () => {
+    mockFileJson.mockResolvedValue({
+      dataValues: [{ dataElement: "de", period: "202501", orgUnit: "ou", value: "1" }],
+    });
+
+    const ctx = buildMockContext({
+      input: { filename: "from-prev-step.json" },
+      handlerConfig: { importStrategy: "UPDATE" },
+    });
+    await dhis2DataUpload.execute(ctx);
+
+    expect(mockPostDataValueSet).toHaveBeenCalledWith(
+      expect.objectContaining({ importStrategy: "UPDATE" })
+    );
+  });
+
+  it("rejects an unknown importStrategy", async () => {
+    const ctx = buildMockContext({
+      input: { filename: "from-prev-step.json" },
+      handlerConfig: { importStrategy: "DELETE" },
+    });
+    await expect(dhis2DataUpload.execute(ctx)).rejects.toThrow(/handlerConfig/);
+    expect(mockPostDataValueSet).not.toHaveBeenCalled();
+  });
+
   it("throws when prior step output omits filename", async () => {
     const ctx = buildMockContext({
       input: {},
       handlerConfig: {},
     });
     await expect(dhis2DataUpload.execute(ctx)).rejects.toThrow(/filename/);
+  });
+
+  it("fails with DHIS2 conflicts when the import status is ERROR", async () => {
+    mockFileJson.mockResolvedValue({
+      dataValues: [{ dataElement: "de", period: "202501", orgUnit: "ou", value: "1" }],
+    });
+    mockPostDataValueSet.mockResolvedValue({
+      status: "ERROR",
+      importCount: { imported: 0, updated: 0, ignored: 1, deleted: 0 },
+      conflicts: [{ object: "de", value: "Data element not found" }],
+    });
+
+    const ctx = buildMockContext({ input: { filename: "f.json" }, handlerConfig: {} });
+    const error = await dhis2DataUpload.execute(ctx).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(StepError);
+    expect((error as StepError).message).toBe("DHIS2 rejected the data value import");
+    expect((error as StepError).details).toMatchObject({
+      source: "dhis2",
+      totalConflicts: 1,
+      conflicts: [{ value: "Data element not found", count: 1, objects: ["de"] }],
+    });
+  });
+
+  it("returns real counts and logs conflicts on WARNING", async () => {
+    mockFileJson.mockResolvedValue({
+      dataValues: [{ dataElement: "de", period: "202501", orgUnit: "ou", value: "1" }],
+    });
+    mockPostDataValueSet.mockResolvedValue({
+      status: "WARNING",
+      importCount: { imported: 5, updated: 2, ignored: 1, deleted: 0 },
+      conflicts: [{ object: "ou", value: "Org unit not in hierarchy" }],
+    });
+
+    const ctx = buildMockContext({ input: { filename: "f.json" }, handlerConfig: {} });
+    const result = await dhis2DataUpload.execute(ctx);
+
+    expect(result).toEqual({ status: "WARNING", imported: 5, updated: 2, ignored: 1, deleted: 0 });
+    expect(ctx.log).toHaveBeenCalledWith(
+      "WARN",
+      expect.stringMatching(/conflicts/),
+      expect.objectContaining({
+        totalConflicts: 1,
+        conflicts: [{ value: "Org unit not in hierarchy", count: 1, objects: ["ou"] }],
+      })
+    );
   });
 
   it("ignores handlerConfig.filename if present", async () => {

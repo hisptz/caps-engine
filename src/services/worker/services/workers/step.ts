@@ -8,7 +8,7 @@ import {
   type StepResultMessage,
 } from "@/services/worker/services/runners/pipeline.ts";
 import type { InputJsonValue } from "@prisma/client/runtime/client";
-import { createTaskReporter } from "@/services/worker/services/runners/step.ts";
+import { createTaskReporter, errorColumns } from "@/services/worker/services/runners/step.ts";
 import { resolveEffectiveHandlerConfig } from "@/services/worker/utils/resolveEffectiveHandlerConfig.ts";
 import {
   parseStepSnapshot,
@@ -184,8 +184,7 @@ export class StepWorker {
         where: { id: stepExecutionId },
         data: {
           status: StepExecutionStatus.FAILED,
-          errorMessage: err.message,
-          errorStack: err.stack,
+          ...errorColumns(err),
           finishedAt: new Date(),
         },
       });
@@ -196,7 +195,7 @@ export class StepWorker {
           executionId,
           stepExecutionId,
           succeeded: false,
-          errorMessage: err.message,
+          errorMessage: errorColumns(err).errorMessage,
         } satisfies StepResultMessage,
       });
       logger.error(
