@@ -1,3 +1,9 @@
+# [1.3.0](https://github.com/hisptz/caps-engine/compare/v1.2.0...v1.3.0) (2026-09-27)
+
+### Features
+
+- implement Open Climate Service sync handler with configuration and job management ([c6ec234](https://github.com/hisptz/caps-engine/commit/c6ec234c2e0b0e558ad8a501444452f11bb4588b))
+
 # [1.2.0](https://github.com/hisptz/caps-engine/compare/v1.1.0...v1.2.0) (2026-09-23)
 
 ### Features
