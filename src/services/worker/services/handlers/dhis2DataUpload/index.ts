@@ -1,4 +1,8 @@
-import { registerHandler, type StepHandler } from "@/services/worker/types/service.ts";
+import {
+  registerHandler,
+  StepSkippedError,
+  type StepHandler,
+} from "@/services/worker/types/service.ts";
 import { Handlers } from "@/services/worker/constants/handlers.ts";
 import { env } from "@/shared/utils/env.ts";
 import path from "node:path";
@@ -14,7 +18,9 @@ import { dhis2DataUploadConfigSchema } from "@/services/worker/services/handlers
  * POSTs it to DHIS2 POST /dataValueSets.
  *
  * Requires ctx.input.filename — basename under OUTPUTS_DIR from the previous step
- * (e.g. threshold-generation or prediction-data-download).
+ * (e.g. threshold-generation or prediction-data-download). A file without values fails the
+ * step, or skips it when the previous step set ctx.input.allowEmpty (e.g. dhis2-instance-pull,
+ * whose source may simply have no data yet for the pulled periods).
  *
  * Config: { importStrategy } — CREATE_AND_UPDATE (default), CREATE or UPDATE.
  *
@@ -29,7 +35,7 @@ export const dhis2DataUpload: StepHandler = {
     }
     const { importStrategy } = parsed.data;
 
-    const input = ctx.input as { filename?: string } | undefined;
+    const input = ctx.input as { filename?: string; allowEmpty?: boolean } | undefined;
     const filename = input?.filename;
 
     if (!filename) {
@@ -60,6 +66,10 @@ export const dhis2DataUpload: StepHandler = {
     }
 
     if (!Array.isArray(payload.dataValues) || payload.dataValues.length === 0) {
+      if (input?.allowEmpty === true && Array.isArray(payload.dataValues)) {
+        await task.succeed({ count: 0 });
+        throw new StepSkippedError("No data values to upload", { count: 0 });
+      }
       const error = new Error(`Data value set file "${filePath}" contains no dataValues`);
       await task.fail(error);
       throw error;

@@ -27,6 +27,8 @@ export const ApiErrorCode = {
 
   CHAP_UNAVAILABLE: "chap_unavailable",
 
+  SOURCE_ROUTE_UNAVAILABLE: "source_route_unavailable",
+
   SYSTEM_INFO_UNAVAILABLE: "system_info_unavailable",
 } as const;
 

@@ -18,7 +18,7 @@ import { dhis2AnalyticsRunConfigSchema } from "@/services/worker/services/handle
 describe("handler catalog", () => {
   it("lists all registered handlers with display metadata", () => {
     const handlers = listHandlerDescriptors();
-    expect(handlers).toHaveLength(12);
+    expect(handlers).toHaveLength(13);
     const keys = handlers.map((h) => h.key).sort();
     expect(keys).toEqual(
       [
@@ -29,6 +29,7 @@ describe("handler catalog", () => {
         "climate-openeo-poll",
         "dhis2-analytics-run",
         "dhis2-data-upload",
+        "dhis2-instance-pull",
         "event-data-upload",
         "prediction-data-download",
         "prediction-poll",
@@ -47,6 +48,15 @@ describe("handler catalog", () => {
     const climateDownload = handlers.find((h) => h.key === "climate-openeo-download");
     expect(climateDownload?.displayName).toBe("Open Climate Service Download");
     expect(climateDownload?.queueName).toBe("step.climate-openeo-download");
+  });
+
+  it("registers dhis2-instance-pull with a period context override", () => {
+    const d = getHandlerDescriptor("dhis2-instance-pull");
+    expect(d?.displayName).toBe("DHIS2 Instance Pull");
+    expect(d?.queueName).toBe("step.dhis2-instance-pull");
+    expect(d?.tags).toEqual(["dhis2", "pull"]);
+    expect(d?.schemas?.config).toBeDefined();
+    expect(d?.schemas?.context).toBeDefined();
   });
 
   it("isKnownHandlerKey accepts registry keys only", () => {

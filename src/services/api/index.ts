@@ -17,6 +17,7 @@ import { monitoringModule } from "@/services/api/modules/monitoring/index.ts";
 import { handlersModule } from "@/services/api/modules/handlers/index.ts";
 import { evaluationsModule } from "@/services/api/modules/evaluations/index.ts";
 import { systemModule } from "@/services/api/modules/system/index.ts";
+import { sourceRoutesModule } from "@/services/api/modules/sourceRoutes/index.ts";
 
 initializeApiDb();
 serviceLogger.info(ServiceType.API, `Initializing API server`);
@@ -52,7 +53,8 @@ const app = new Elysia()
   .use(monitoringModule)
   .use(handlersModule)
   .use(evaluationsModule)
-  .use(systemModule);
+  .use(systemModule)
+  .use(sourceRoutesModule);
 
 await printBanner("CAPS API");
 const port = Number(env.PORT) || 4000;
