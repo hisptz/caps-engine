@@ -19,11 +19,11 @@ import {
   pullItemTarget,
   type Dhis2InstancePullConfig,
 } from "./schemas/config.ts";
-import { periodEnd, resolvePullPeriods } from "./utils/periods.ts";
+import { parsePeriodId, periodEnd, resolvePullPeriods } from "./utils/periods.ts";
 import { COMBO_FIELDS, toComboMeta, type ComboMeta } from "./utils/categoryCombos.ts";
 import { dxItems, planItems, type ItemPlan } from "./utils/itemPlans.ts";
 import { chunkKey, createChunkCache, sweepOldChunkFolders } from "./utils/chunkCache.ts";
-import { matchOrgUnits, orgUnitCodes } from "./utils/orgUnits.ts";
+import { isOpenForPeriod, matchOrgUnits, orgUnitsById } from "./utils/orgUnits.ts";
 
 type SourceSystemInfo = AnalyticsSystemInfo & {
   version?: string;
@@ -49,6 +49,8 @@ export type Dhis2InstancePullOutput = {
   periods: string[];
   orgUnits: number;
   skippedOrgUnits: string[];
+  /** Staging org units closed (or not yet open) for some pulled periods; those values are left out. */
+  closedOrgUnits: string[];
   sourceAnalyticsUpTo: string | null;
   sourceVersion: string | null;
 };
@@ -72,7 +74,7 @@ type IdList = { id: string }[];
 const DX_ITEMS_PER_REQUEST = 50;
 
 /**
- * Org unit IDs (or codes) per lookup when matching org units. Lookups only return `id,code`,
+ * Org unit IDs (or codes) per lookup when matching org units. Lookups return a few short fields,
  * so they can be much larger than download chunks; 500 IDs keep the URL around 6 KB.
  */
 const ORG_UNITS_PER_LOOKUP = 500;
@@ -127,6 +129,8 @@ async function runPreflight(
   /** Staging org unit ID for each source org unit ID to pull. */
   stagingOrgUnitBySource: Map<string, string>;
   skippedOrgUnits: string[];
+  /** Periods each staging org unit is closed for; values for them are left out. */
+  closedPeriods: Map<string, Set<string>>;
   sourceVersion: string | null;
   sourceAnalyticsUpTo: string | null;
   plans: ItemPlan[];
@@ -191,8 +195,13 @@ async function runPreflight(
 
     const stagingOrgUnits = await resolveOrgUnitsWithTask(ctx, config.orgUnit);
     const byCode = config.orgUnitMatch === "code";
+    const stagingUnits = await orgUnitsById(dhis2RestClient, stagingOrgUnits, ORG_UNITS_PER_LOOKUP);
     const codes = byCode
-      ? await orgUnitCodes(dhis2RestClient, stagingOrgUnits, ORG_UNITS_PER_LOOKUP)
+      ? new Map(
+          [...stagingUnits.values()].flatMap((unit) =>
+            unit.code ? [[unit.id, unit.code] as const] : []
+          )
+        )
       : undefined;
     let matched: Awaited<ReturnType<typeof matchOrgUnits>>;
     try {
@@ -233,6 +242,45 @@ async function runPreflight(
       );
     }
 
+    // DHIS2 rejects the whole import if any value falls outside its org unit's open dates.
+    const periodStarts = periods.map(
+      (period) => [period, parsePeriodId(period, config.period.periodType).toISODate()!] as const
+    );
+    const closedPeriods = new Map<string, Set<string>>();
+    for (const [sourceId, stagingId] of stagingOrgUnitBySource) {
+      const unit = stagingUnits.get(stagingId);
+      const closed = periodStarts.filter(([, start]) => !isOpenForPeriod(unit, start));
+      if (closed.length === periods.length) {
+        stagingOrgUnitBySource.delete(sourceId);
+      }
+      if (closed.length > 0) {
+        closedPeriods.set(stagingId, new Set(closed.map(([period]) => period)));
+      }
+    }
+    if (closedPeriods.size > 0) {
+      await ctx.log(
+        "WARN",
+        "Some org units are closed on staging for some of the pulled periods; their values for those periods are left out",
+        {
+          count: closedPeriods.size,
+          orgUnits: [...closedPeriods].slice(0, 50).map(([id, closed]) => ({
+            id,
+            openingDate: stagingUnits.get(id)?.openingDate ?? null,
+            closedDate: stagingUnits.get(id)?.closedDate ?? null,
+            periods: [...closed],
+          })),
+        }
+      );
+    }
+    if (stagingOrgUnitBySource.size === 0) {
+      throw new StepError("All matched org units are closed on staging for the pulled periods", {
+        source: "dhis2",
+        description:
+          "Pick other org units or periods, or update the org units' opening and closed dates on staging.",
+        closedOrgUnits: [...closedPeriods.keys()],
+      });
+    }
+
     const lastGenerated = analyticsUpTo(info);
     const lastPeriod = periods[periods.length - 1]!;
     if (!lastGenerated) {
@@ -253,11 +301,13 @@ async function runPreflight(
       orgUnits: stagingOrgUnitBySource.size,
       orgUnitMatch: config.orgUnitMatch,
       skippedOrgUnits: skippedOrgUnits.length,
+      closedOrgUnits: closedPeriods.size,
       byOptionCombo: plans.filter((p) => p.mode === "combos").map((p) => p.target),
     });
     return {
       stagingOrgUnitBySource,
       skippedOrgUnits,
+      closedPeriods,
       sourceVersion: info.version ?? null,
       sourceAnalyticsUpTo: lastGenerated,
       plans,
@@ -279,8 +329,10 @@ async function runPreflight(
  *      each item's option combos line up (see `planItems`: per option combo when the staging
  *      data element has categories, the total when it has none), each staging org unit has a
  *      source org unit with the same ID, or the same code when `orgUnitMatch` is "code"
- *      (unmatched ones are skipped with a warning), and the source's analytics are recent
- *      enough (warning only).
+ *      (unmatched ones are skipped with a warning), which periods each staging org unit is
+ *      open for (values outside its opening/closed dates are left out with a warning, as
+ *      DHIS2 would reject the whole import), and the source's analytics are recent enough
+ *      (warning only).
  *   2. Download `analytics/dataValueSet` (unrounded) in chunks of periods × org units × items,
  *      one task each, with `DE.COC` operands in `dx` for items pulled per option combo.
  *      Each downloaded chunk is saved under OUTPUTS_DIR, so a retry of the step downloads only
@@ -309,8 +361,14 @@ export const dhis2InstancePull: StepHandler = {
       periods: periods.length,
     });
 
-    const { stagingOrgUnitBySource, skippedOrgUnits, sourceVersion, sourceAnalyticsUpTo, plans } =
-      await runPreflight(ctx, config, source, periods);
+    const {
+      stagingOrgUnitBySource,
+      skippedOrgUnits,
+      closedPeriods,
+      sourceVersion,
+      sourceAnalyticsUpTo,
+      plans,
+    } = await runPreflight(ctx, config, source, periods);
 
     const totalTarget = new Map<string, string>();
     const comboTarget = new Map<string, { target: string; combo: string }>();
@@ -407,6 +465,7 @@ export const dhis2InstancePull: StepHandler = {
 
             let written = 0;
             let unmapped = 0;
+            let closedValues = 0;
             for (const value of sourceValues) {
               const combo = value.categoryOptionCombo
                 ? comboTarget.get(`${value.dataElement}.${value.categoryOptionCombo}`)
@@ -416,10 +475,16 @@ export const dhis2InstancePull: StepHandler = {
                 unmapped += 1;
                 continue;
               }
+              const orgUnit = stagingOrgUnitBySource.get(value.orgUnit) ?? value.orgUnit;
+              if (closedPeriods.get(orgUnit)?.has(value.period)) {
+                closedValues += 1;
+                continue;
+              }
               dataValues.push({
                 dataElement: target,
                 period: value.period,
-                orgUnit: stagingOrgUnitBySource.get(value.orgUnit) ?? value.orgUnit,
+                orgUnit,
+                // Totals carry whatever combo analytics reports; staging stores them under its default.
                 ...(combo ? { categoryOptionCombo: combo.combo } : {}),
                 value: value.value,
               });
@@ -431,7 +496,10 @@ export const dhis2InstancePull: StepHandler = {
                 unmapped,
               });
             }
-            await task.succeed({ values: written });
+            await task.succeed({
+              values: written,
+              ...(closedValues > 0 ? { leftOutClosedOrgUnits: closedValues } : {}),
+            });
           } catch (err) {
             await task.fail(err instanceof Error ? err : new Error(String(err)));
             throw err;
@@ -481,6 +549,7 @@ export const dhis2InstancePull: StepHandler = {
       periods,
       orgUnits: stagingOrgUnitBySource.size,
       skippedOrgUnits,
+      closedOrgUnits: [...closedPeriods.keys()],
       sourceAnalyticsUpTo: sourceAnalyticsUpTo,
       sourceVersion: sourceVersion,
     };

@@ -105,6 +105,8 @@ function filterValues(params: unknown): { field: string; values: string[] } {
 /** Org unit codes on staging (by ID); org units not listed have no code. */
 let stagingOrgUnitCodes: Record<string, string> = {};
 
+let stagingOrgUnitDates: Record<string, { openingDate?: string; closedDate?: string }> = {};
+
 function dimension(params: URLSearchParams, name: string): string[] {
   const value = params.getAll("dimension").find((d) => d.startsWith(`${name}:`))!;
   return value.slice(name.length + 1).split(";");
@@ -227,7 +229,7 @@ function mockStaging(
         [resource]: ids.map((id) =>
           resource === "dataElements"
             ? { id, categoryCombo: combos[id] ?? DEFAULT_COMBO, valueType: valueTypes[id] }
-            : { id, code: stagingOrgUnitCodes[id] }
+            : { id, code: stagingOrgUnitCodes[id], ...stagingOrgUnitDates[id] }
         ),
       },
     };
@@ -248,6 +250,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   savedChunks.clear();
   stagingOrgUnitCodes = {};
+  stagingOrgUnitDates = {};
   mockBunWrite.mockResolvedValue(0);
   mockStaging();
   mockSource();
@@ -834,6 +837,68 @@ describe("dhis2-instance-pull org unit matching by code", () => {
 
   it("defaults to matching by ID", () => {
     expect(dhis2InstancePullConfigSchema.parse(baseConfig()).orgUnitMatch).toBe("id");
+  });
+});
+
+describe("dhis2-instance-pull org unit open dates", () => {
+  function requestedOrgUnits(): string[] {
+    return analyticsCalls().flatMap(([, c]) =>
+      dimension((c as { params: URLSearchParams }).params, "ou")
+    );
+  }
+
+  it("leaves out periods that start after the org unit closed on staging", async () => {
+    // 202602 starts on the closed date, which DHIS2 still accepts; 202603 doesn't.
+    stagingOrgUnitDates = { [OU_B]: { closedDate: "2026-02-01T00:00:00.000" } };
+    const ctx = buildMockContext({ handlerConfig: baseConfig() });
+    const result = (await dhis2InstancePull.execute(ctx)) as Record<string, unknown>;
+
+    const periodsForB = writtenDataValues()
+      .filter((v) => v.orgUnit === OU_B)
+      .map((v) => v.period);
+    expect(new Set(periodsForB)).toEqual(new Set(["202601", "202602"]));
+    expect(result).toMatchObject({ count: 15, closedOrgUnits: [OU_B] });
+    expect(ctx.log).toHaveBeenCalledWith(
+      "WARN",
+      expect.stringContaining("closed on staging"),
+      expect.objectContaining({
+        orgUnits: [expect.objectContaining({ id: OU_B, periods: ["202603"] })],
+      })
+    );
+  });
+
+  it("leaves out periods that start before the org unit opened", async () => {
+    stagingOrgUnitDates = { [OU_A]: { openingDate: "2026-01-15T00:00:00.000" } };
+    await dhis2InstancePull.execute(buildMockContext({ handlerConfig: baseConfig() }));
+
+    const periodsForA = writtenDataValues()
+      .filter((v) => v.orgUnit === OU_A)
+      .map((v) => v.period);
+    expect(new Set(periodsForA)).toEqual(new Set(["202602", "202603"]));
+  });
+
+  it("doesn't download org units closed for the whole window", async () => {
+    stagingOrgUnitDates = { [OU_B]: { closedDate: "2016-10-01T00:00:00.000" } };
+    const result = (await dhis2InstancePull.execute(
+      buildMockContext({ handlerConfig: baseConfig() })
+    )) as Record<string, unknown>;
+
+    expect(new Set(requestedOrgUnits())).toEqual(new Set([OU_A]));
+    expect(result).toMatchObject({ count: 9, orgUnits: 1, closedOrgUnits: [OU_B] });
+  });
+
+  it("fails when every org unit is closed for the window", async () => {
+    stagingOrgUnitDates = {
+      [OU_A]: { closedDate: "2016-10-01T00:00:00.000" },
+      [OU_B]: { closedDate: "2016-10-01T00:00:00.000" },
+    };
+    const error = await dhis2InstancePull
+      .execute(buildMockContext({ handlerConfig: baseConfig() }))
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(StepError);
+    expect((error as StepError).message).toMatch(/closed on staging/);
+    expect(analyticsCalls()).toHaveLength(0);
   });
 });
 

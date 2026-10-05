@@ -1,6 +1,12 @@
 import type { AxiosInstance } from "axios";
 
-type OrgUnitRow = { id: string; code?: string };
+export type OrgUnitRow = {
+  id: string;
+  code?: string;
+  /** DHIS2 date-times like "2016-10-01T00:00:00.000". */
+  openingDate?: string;
+  closedDate?: string;
+};
 
 const MAX_FILTER_CHARS = 5500;
 
@@ -44,27 +50,30 @@ async function findOrgUnits(
   for (const filter of filters) {
     const response = await client.get<{ organisationUnits?: OrgUnitRow[] }>(
       "organisationUnits.json",
-      { params: { filter, fields: "id,code", paging: "false" } }
+      { params: { filter, fields: "id,code,openingDate,closedDate", paging: "false" } }
     );
     found.push(...(response.data.organisationUnits ?? []));
   }
   return found;
 }
 
-/** Codes of the staging org units `ids`; org units without a code are left out. */
-export async function orgUnitCodes(
+export async function orgUnitsById(
   client: AxiosInstance,
   ids: string[],
   batchSize: number
-): Promise<Map<string, string>> {
+): Promise<Map<string, OrgUnitRow>> {
   const units = await findOrgUnits(client, "id", ids, batchSize);
-  return new Map(units.flatMap((unit) => (unit.code ? [[unit.id, unit.code] as const] : [])));
+  return new Map(units.map((unit) => [unit.id, unit]));
+}
+
+export function isOpenForPeriod(unit: OrgUnitRow | undefined, periodStart: string): boolean {
+  const opening = unit?.openingDate?.slice(0, 10);
+  const closed = unit?.closedDate?.slice(0, 10);
+  return (!opening || periodStart >= opening) && (!closed || periodStart <= closed);
 }
 
 export type MatchedOrgUnits = {
-  /** Staging org unit ID for each matched source org unit ID. */
   stagingBySource: Map<string, string>;
-  /** Staging org units with no match on the source, in selection order. */
   unmatched: string[];
 };
 
