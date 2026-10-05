@@ -23,6 +23,7 @@ import { periodEnd, resolvePullPeriods } from "./utils/periods.ts";
 import { COMBO_FIELDS, toComboMeta, type ComboMeta } from "./utils/categoryCombos.ts";
 import { dxItems, planItems, type ItemPlan } from "./utils/itemPlans.ts";
 import { chunkKey, createChunkCache, sweepOldChunkFolders } from "./utils/chunkCache.ts";
+import { matchOrgUnits, orgUnitCodes } from "./utils/orgUnits.ts";
 
 type SourceSystemInfo = AnalyticsSystemInfo & {
   version?: string;
@@ -69,6 +70,12 @@ const sourceDataValueSetSchema = z.object({
 type IdList = { id: string }[];
 
 const DX_ITEMS_PER_REQUEST = 50;
+
+/**
+ * Org unit IDs (or codes) per lookup when matching org units. Lookups only return `id,code`,
+ * so they can be much larger than download chunks; 500 IDs keep the URL around 6 KB.
+ */
+const ORG_UNITS_PER_LOOKUP = 500;
 
 /** Folder under OUTPUTS_DIR holding downloaded chunks until the step's file is written. */
 const CHUNK_CACHE_DIR = "dhis2-instance-pull-chunks";
@@ -117,7 +124,8 @@ async function runPreflight(
   source: AxiosInstance,
   periods: string[]
 ): Promise<{
-  orgUnitIds: string[];
+  /** Staging org unit ID for each source org unit ID to pull. */
+  stagingOrgUnitBySource: Map<string, string>;
   skippedOrgUnits: string[];
   sourceVersion: string | null;
   sourceAnalyticsUpTo: string | null;
@@ -182,14 +190,13 @@ async function runPreflight(
     }
 
     const stagingOrgUnits = await resolveOrgUnitsWithTask(ctx, config.orgUnit);
-    let skippedOrgUnits: string[];
+    const byCode = config.orgUnitMatch === "code";
+    const codes = byCode
+      ? await orgUnitCodes(dhis2RestClient, stagingOrgUnits, ORG_UNITS_PER_LOOKUP)
+      : undefined;
+    let matched: Awaited<ReturnType<typeof matchOrgUnits>>;
     try {
-      skippedOrgUnits = await findMissingIds(
-        source,
-        "organisationUnits",
-        stagingOrgUnits,
-        config.chunk.orgUnits
-      );
+      matched = await matchOrgUnits(source, stagingOrgUnits, ORG_UNITS_PER_LOOKUP, codes);
     } catch (err) {
       throw new StepError("Could not check org units on the source instance", {
         source: "dhis2-route",
@@ -197,20 +204,33 @@ async function runPreflight(
         description: describeRouteError(err, routeCode),
       });
     }
-    const skipped = new Set(skippedOrgUnits);
-    const orgUnitIds = stagingOrgUnits.filter((id) => !skipped.has(id));
-    if (orgUnitIds.length === 0) {
-      throw new StepError("None of the selected org units exist on the source instance", {
-        source: "dhis2-route",
-        routeCode,
-        missingOrgUnits: skippedOrgUnits,
-      });
+    const { stagingBySource: stagingOrgUnitBySource, unmatched: skippedOrgUnits } = matched;
+    const withoutCode = codes ? stagingOrgUnits.filter((id) => !codes.has(id)) : [];
+    if (stagingOrgUnitBySource.size === 0) {
+      throw new StepError(
+        byCode
+          ? "None of the selected org units have a matching code on the source instance"
+          : "None of the selected org units exist on the source instance",
+        {
+          source: "dhis2-route",
+          routeCode,
+          missingOrgUnits: skippedOrgUnits,
+          ...(byCode ? { withoutCode } : {}),
+        }
+      );
     }
     if (skippedOrgUnits.length > 0) {
-      await ctx.log("WARN", "Some org units don't exist on the source instance and were skipped", {
-        count: skippedOrgUnits.length,
-        orgUnits: skippedOrgUnits.slice(0, 50),
-      });
+      await ctx.log(
+        "WARN",
+        byCode
+          ? "Some org units have no matching code on the source instance and were skipped"
+          : "Some org units don't exist on the source instance and were skipped",
+        {
+          count: skippedOrgUnits.length,
+          orgUnits: skippedOrgUnits.slice(0, 50),
+          ...(byCode ? { withoutCode: withoutCode.length } : {}),
+        }
+      );
     }
 
     const lastGenerated = analyticsUpTo(info);
@@ -230,12 +250,13 @@ async function runPreflight(
     await task.succeed({
       sourceVersion: info.version ?? null,
       analyticsUpTo: lastGenerated,
-      orgUnits: orgUnitIds.length,
+      orgUnits: stagingOrgUnitBySource.size,
+      orgUnitMatch: config.orgUnitMatch,
       skippedOrgUnits: skippedOrgUnits.length,
       byOptionCombo: plans.filter((p) => p.mode === "combos").map((p) => p.target),
     });
     return {
-      orgUnitIds,
+      stagingOrgUnitBySource,
       skippedOrgUnits,
       sourceVersion: info.version ?? null,
       sourceAnalyticsUpTo: lastGenerated,
@@ -252,13 +273,14 @@ async function runPreflight(
  *
  * Pulls aggregate data for the configured data items from a source DHIS2 instance, through a
  * `caps-src-` route on staging, and writes it as a DataValueSet file for `dhis2-data-upload`.
- * Source IDs are rewritten to their staging data elements (and option combos).
+ * Source IDs are rewritten to their staging data elements (and option combos) and org units.
  *
  *   1. Preflight: the route works, target data elements and org units exist on staging,
  *      each item's option combos line up (see `planItems`: per option combo when the staging
- *      data element has categories, the total when it has none), org units exist on the source
- *      (missing ones are skipped with a warning), and the source's analytics are recent enough
- *      (warning only).
+ *      data element has categories, the total when it has none), each staging org unit has a
+ *      source org unit with the same ID, or the same code when `orgUnitMatch` is "code"
+ *      (unmatched ones are skipped with a warning), and the source's analytics are recent
+ *      enough (warning only).
  *   2. Download `analytics/dataValueSet` (unrounded) in chunks of periods × org units × items,
  *      one task each, with `DE.COC` operands in `dx` for items pulled per option combo.
  *      Each downloaded chunk is saved under OUTPUTS_DIR, so a retry of the step downloads only
@@ -287,7 +309,7 @@ export const dhis2InstancePull: StepHandler = {
       periods: periods.length,
     });
 
-    const { orgUnitIds, skippedOrgUnits, sourceVersion, sourceAnalyticsUpTo, plans } =
+    const { stagingOrgUnitBySource, skippedOrgUnits, sourceVersion, sourceAnalyticsUpTo, plans } =
       await runPreflight(ctx, config, source, periods);
 
     const totalTarget = new Map<string, string>();
@@ -306,7 +328,7 @@ export const dhis2InstancePull: StepHandler = {
     }
     const dxChunks = chunk(dxItems(plans), DX_ITEMS_PER_REQUEST);
     const periodChunks = chunk(periods, config.chunk.periods);
-    const orgUnitChunks = chunk(orgUnitIds, config.chunk.orgUnits);
+    const orgUnitChunks = chunk([...stagingOrgUnitBySource.keys()], config.chunk.orgUnits);
     const totalChunks = periodChunks.length * orgUnitChunks.length * dxChunks.length;
     const { executionId, stepId } = ctx.stepExecution;
     const cacheRoot = path.resolve(env.OUTPUTS_DIR, CHUNK_CACHE_DIR);
@@ -397,7 +419,7 @@ export const dhis2InstancePull: StepHandler = {
               dataValues.push({
                 dataElement: target,
                 period: value.period,
-                orgUnit: value.orgUnit,
+                orgUnit: stagingOrgUnitBySource.get(value.orgUnit) ?? value.orgUnit,
                 ...(combo ? { categoryOptionCombo: combo.combo } : {}),
                 value: value.value,
               });
@@ -457,7 +479,7 @@ export const dhis2InstancePull: StepHandler = {
       counts,
       byOptionCombo: plans.filter((p) => p.mode === "combos").map((p) => p.target),
       periods,
-      orgUnits: orgUnitIds.length,
+      orgUnits: stagingOrgUnitBySource.size,
       skippedOrgUnits,
       sourceAnalyticsUpTo: sourceAnalyticsUpTo,
       sourceVersion: sourceVersion,

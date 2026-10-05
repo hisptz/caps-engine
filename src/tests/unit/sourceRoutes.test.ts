@@ -26,6 +26,7 @@ describe("testSourceRoute", () => {
         ? { data: { username: "caps_reader", displayName: "CAPS Reader" } }
         : {
             data: {
+              systemName: "DHIS2 Demo - Sierra Leone",
               version: "2.41.2",
               revision: "abc123",
               contextPath: "https://play.im.dhis2.org/dev",
@@ -43,6 +44,7 @@ describe("testSourceRoute", () => {
       reachable: true,
       user: { username: "caps_reader", displayName: "CAPS Reader" },
       system: {
+        systemName: "DHIS2 Demo - Sierra Leone",
         version: "2.41.2",
         revision: "abc123",
         contextPath: "https://play.im.dhis2.org/dev",

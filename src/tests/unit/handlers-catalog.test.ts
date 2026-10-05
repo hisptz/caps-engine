@@ -159,6 +159,21 @@ describe("handler config JSON Schema round-trip", () => {
     ).toBe(false);
   });
 
+  it("catalog schemas leave defaulted fields optional, for steps saved before they existed", () => {
+    const json = getHandlerDescriptor("dhis2-instance-pull")!.schemas!.config!;
+    const rebuilt = z.fromJSONSchema(json);
+    const savedBeforeOrgUnitMatch = {
+      routeCode: "caps-src-play",
+      items: [{ from: "fbfJHSPpUQD", fromType: "DATA_ELEMENT" }],
+      orgUnit: { levels: [2] },
+      period: { mode: "relative", periodType: "MONTHLY", count: 3, offset: 1 },
+    };
+    expect(rebuilt.safeParse(savedBeforeOrgUnitMatch).success).toBe(true);
+    expect(rebuilt.safeParse({ ...savedBeforeOrgUnitMatch, orgUnitMatch: "name" }).success).toBe(
+      false
+    );
+  });
+
   it("climate-openeo-create round-trips valid structural config", () => {
     const valid = {
       datasetId: "x",

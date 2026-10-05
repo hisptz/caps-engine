@@ -104,6 +104,7 @@ export const dhis2InstancePullConfigSchema = z.object({
       });
     }),
   orgUnit: orgUnitConfigSchema,
+  orgUnitMatch: z.enum(["id", "code"]).default("id"),
   period: pullPeriodSchema,
   chunk: z
     .object({

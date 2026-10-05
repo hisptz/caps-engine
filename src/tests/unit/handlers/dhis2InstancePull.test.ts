@@ -95,6 +95,16 @@ function filterIds(params: unknown): string[] {
   return /^id:in:\[(.*)\]$/.exec(filter)![1]!.split(",");
 }
 
+/** Field and values of an `id:in:[a,b]`, `code:in:[a,b]` or `code:eq:a` filter. */
+function filterValues(params: unknown): { field: string; values: string[] } {
+  const filter = (params as { filter: string }).filter;
+  const [, field, op, rest] = /^(\w+):(in|eq):(.*)$/.exec(filter)!;
+  return { field: field!, values: op === "eq" ? [rest!] : rest!.slice(1, -1).split(",") };
+}
+
+/** Org unit codes on staging (by ID); org units not listed have no code. */
+let stagingOrgUnitCodes: Record<string, string> = {};
+
 function dimension(params: URLSearchParams, name: string): string[] {
   const value = params.getAll("dimension").find((d) => d.startsWith(`${name}:`))!;
   return value.slice(name.length + 1).split(";");
@@ -129,6 +139,8 @@ type SourceOptions = {
   valueTypes?: Record<string, string>;
   /** Analytics answers without values, like a source with no data for the window. */
   noData?: boolean;
+  /** Org units the source has under other IDs, by source ID → code. */
+  orgUnitCodes?: Record<string, string>;
 };
 
 /** Source instance that has every requested item and answers 1 per (dx, pe, ou). */
@@ -139,6 +151,7 @@ function mockSource({
   combos = {},
   valueTypes = {},
   noData = false,
+  orgUnitCodes = {},
 }: SourceOptions = {}) {
   mockSourceGet.mockImplementation(async (url: string, config?: { params?: unknown }) => {
     switch (url) {
@@ -147,14 +160,22 @@ function mockSource({
         return { data: { id: "sourceUser01" } };
       case "system/info.json":
         return { data: { version: "2.41.2", lastAnalyticsTableSuccess } };
-      case "organisationUnits.json":
+      case "organisationUnits.json": {
+        const { field, values } = filterValues(config?.params);
+        if (field === "code") {
+          const organisationUnits = Object.entries(orgUnitCodes)
+            .filter(([, code]) => values.includes(code))
+            .map(([id, code]) => ({ id, code }));
+          return { data: { organisationUnits } };
+        }
         return {
           data: {
-            organisationUnits: filterIds(config?.params)
+            organisationUnits: values
               .filter((id) => !missingOrgUnits.includes(id))
               .map((id) => ({ id })),
           },
         };
+      }
       case "dataElements.json":
         return {
           data: {
@@ -206,7 +227,7 @@ function mockStaging(
         [resource]: ids.map((id) =>
           resource === "dataElements"
             ? { id, categoryCombo: combos[id] ?? DEFAULT_COMBO, valueType: valueTypes[id] }
-            : { id }
+            : { id, code: stagingOrgUnitCodes[id] }
         ),
       },
     };
@@ -226,6 +247,7 @@ function writtenDataValues(): Array<Record<string, string>> {
 beforeEach(() => {
   vi.clearAllMocks();
   savedChunks.clear();
+  stagingOrgUnitCodes = {};
   mockBunWrite.mockResolvedValue(0);
   mockStaging();
   mockSource();
@@ -383,6 +405,20 @@ describe("dhis2-instance-pull handler", () => {
       [["202603"], [OU_C]],
     ]);
     expect(writtenDataValues()).toHaveLength(27);
+  });
+
+  it("checks org units on the source in large lookups, not per download chunk", async () => {
+    const ctx = buildMockContext({
+      handlerConfig: baseConfig({
+        orgUnit: { ids: [OU_A, OU_B, OU_C] },
+        chunk: { periods: 12, orgUnits: 1 },
+      }),
+    });
+    await dhis2InstancePull.execute(ctx);
+
+    const lookups = mockSourceGet.mock.calls.filter(([url]) => url === "organisationUnits.json");
+    expect(lookups).toHaveLength(1);
+    expect(analyticsCalls()).toHaveLength(3);
   });
 
   it("asks analytics for unrounded values", async () => {
@@ -714,6 +750,90 @@ describe("dhis2-instance-pull retries", () => {
     await dhis2InstancePull.execute(other);
 
     expect(requestedPeriods()).toEqual(["202601", "202602", "202603"]);
+  });
+});
+
+describe("dhis2-instance-pull org unit matching by code", () => {
+  const SRC_A = "srcOuA00001";
+  const SRC_B = "srcOuB00001";
+  const config = () => baseConfig({ orgUnitMatch: "code" });
+
+  function requestedOrgUnits(): string[] {
+    return analyticsCalls().flatMap(([, c]) =>
+      dimension((c as { params: URLSearchParams }).params, "ou")
+    );
+  }
+
+  it("pulls source org units with the same code and writes under the staging IDs", async () => {
+    stagingOrgUnitCodes = { [OU_A]: "OU_A", [OU_B]: "OU_B" };
+    mockSource({ orgUnitCodes: { [SRC_A]: "OU_A", [SRC_B]: "OU_B" } });
+    const result = (await dhis2InstancePull.execute(
+      buildMockContext({ handlerConfig: config() })
+    )) as Record<string, unknown>;
+
+    expect(new Set(requestedOrgUnits())).toEqual(new Set([SRC_A, SRC_B]));
+    expect(new Set(writtenDataValues().map((v) => v.orgUnit))).toEqual(new Set([OU_A, OU_B]));
+    expect(result).toMatchObject({ count: 18, orgUnits: 2, skippedOrgUnits: [] });
+  });
+
+  it("skips org units without a code or with a code the source doesn't have", async () => {
+    stagingOrgUnitCodes = { [OU_A]: "OU_A", [OU_B]: "OU_B" };
+    mockSource({ orgUnitCodes: { [SRC_A]: "OU_A" } });
+    const ctx = buildMockContext({
+      handlerConfig: baseConfig({ orgUnitMatch: "code", orgUnit: { ids: [OU_A, OU_B, OU_C] } }),
+    });
+    const result = (await dhis2InstancePull.execute(ctx)) as Record<string, unknown>;
+
+    expect(result).toMatchObject({ orgUnits: 1, skippedOrgUnits: [OU_B, OU_C] });
+    expect(ctx.log).toHaveBeenCalledWith(
+      "WARN",
+      expect.stringContaining("no matching code"),
+      expect.objectContaining({ count: 2, withoutCode: 1 })
+    );
+  });
+
+  it("fails when no org unit matches by code", async () => {
+    mockSource({ orgUnitCodes: { [SRC_A]: "OU_A" } });
+    const error = await dhis2InstancePull
+      .execute(buildMockContext({ handlerConfig: config() }))
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(StepError);
+    expect((error as StepError).message).toMatch(/matching code/);
+    expect((error as StepError).details).toMatchObject({ withoutCode: [OU_A, OU_B] });
+    expect(analyticsCalls()).toHaveLength(0);
+  });
+
+  it("looks up codes with commas one at a time", async () => {
+    stagingOrgUnitCodes = { [OU_A]: "OU_A", [OU_B]: "Clinic, North" };
+    mockSource({ orgUnitCodes: { [SRC_A]: "OU_A", [SRC_B]: "Clinic, North" } });
+    await dhis2InstancePull.execute(buildMockContext({ handlerConfig: config() }));
+
+    const filters = mockSourceGet.mock.calls
+      .filter(([url]) => url === "organisationUnits.json")
+      .map(([, c]) => (c as { params: { filter: string } }).params.filter);
+    expect(filters).toEqual(["code:in:[OU_A]", "code:eq:Clinic, North"]);
+    expect(new Set(requestedOrgUnits())).toEqual(new Set([SRC_A, SRC_B]));
+  });
+
+  it("splits long codes over several lookups to keep URLs short", async () => {
+    const longCode = (n: number) => `${"x".repeat(1990)}${n}`;
+    stagingOrgUnitCodes = { [OU_A]: longCode(1), [OU_B]: longCode(2), [OU_C]: longCode(3) };
+    mockSource({ orgUnitCodes: { [SRC_A]: longCode(1), [SRC_B]: longCode(2) } });
+    await dhis2InstancePull.execute(
+      buildMockContext({
+        handlerConfig: baseConfig({ orgUnitMatch: "code", orgUnit: { ids: [OU_A, OU_B, OU_C] } }),
+      })
+    );
+
+    const lookups = mockSourceGet.mock.calls.filter(([url]) => url === "organisationUnits.json");
+    expect(
+      lookups.map(([, c]) => filterValues((c as { params: unknown }).params).values.length)
+    ).toEqual([2, 1]);
+  });
+
+  it("defaults to matching by ID", () => {
+    expect(dhis2InstancePullConfigSchema.parse(baseConfig()).orgUnitMatch).toBe("id");
   });
 });
 
