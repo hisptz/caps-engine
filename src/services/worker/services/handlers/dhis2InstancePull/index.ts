@@ -22,6 +22,7 @@ import {
 import { periodEnd, resolvePullPeriods } from "./utils/periods.ts";
 import { COMBO_FIELDS, toComboMeta, type ComboMeta } from "./utils/categoryCombos.ts";
 import { dxItems, planItems, type ItemPlan } from "./utils/itemPlans.ts";
+import { chunkKey, createChunkCache, sweepOldChunkFolders } from "./utils/chunkCache.ts";
 
 type SourceSystemInfo = AnalyticsSystemInfo & {
   version?: string;
@@ -68,6 +69,11 @@ const sourceDataValueSetSchema = z.object({
 type IdList = { id: string }[];
 
 const DX_ITEMS_PER_REQUEST = 50;
+
+/** Folder under OUTPUTS_DIR holding downloaded chunks until the step's file is written. */
+const CHUNK_CACHE_DIR = "dhis2-instance-pull-chunks";
+/** Saved chunks untouched for this long belong to runs nobody retried; each pull deletes them. */
+const CHUNK_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function findMissingIds(
   client: AxiosInstance,
@@ -255,7 +261,10 @@ async function runPreflight(
  *      (warning only).
  *   2. Download `analytics/dataValueSet` (unrounded) in chunks of periods × org units × items,
  *      one task each, with `DE.COC` operands in `dx` for items pulled per option combo.
- *   3. Write one DataValueSet file to OUTPUTS_DIR.
+ *      Each downloaded chunk is saved under OUTPUTS_DIR, so a retry of the step downloads only
+ *      the chunk that failed and the ones after it.
+ *   3. Write one DataValueSet file to OUTPUTS_DIR and delete the saved chunks. Chunks of runs
+ *      that failed and weren't retried within 7 days are deleted by the next pull.
  *
  * Output: Dhis2InstancePullOutput — `filename` feeds dhis2-data-upload.
  */
@@ -299,6 +308,22 @@ export const dhis2InstancePull: StepHandler = {
     const periodChunks = chunk(periods, config.chunk.periods);
     const orgUnitChunks = chunk(orgUnitIds, config.chunk.orgUnits);
     const totalChunks = periodChunks.length * orgUnitChunks.length * dxChunks.length;
+    const { executionId, stepId } = ctx.stepExecution;
+    const cacheRoot = path.resolve(env.OUTPUTS_DIR, CHUNK_CACHE_DIR);
+    const cache = createChunkCache(path.join(cacheRoot, `${executionId}_${stepId}`));
+    try {
+      const swept = await sweepOldChunkFolders(cacheRoot, CHUNK_CACHE_MAX_AGE_MS);
+      if (swept > 0) {
+        await ctx.log("INFO", "Deleted chunks saved by old runs that were never retried", {
+          folders: swept,
+        });
+      }
+    } catch (err) {
+      await ctx.log("WARN", "Could not delete chunks saved by old runs", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    let reusedChunks = 0;
 
     const dataValues: PulledDataValue[] = [];
     const counts: Record<string, number> = Object.fromEntries(
@@ -310,41 +335,57 @@ export const dhis2InstancePull: StepHandler = {
       for (const orgUnitChunk of orgUnitChunks) {
         for (const dxChunk of dxChunks) {
           chunkNumber += 1;
+          const key = chunkKey({ routeCode, dx: dxChunk, pe: periodChunk, ou: orgUnitChunk });
+          const saved = sourceDataValueSetSchema.safeParse(await cache.read(key));
           const task = await ctx.tasks.startTask("download-chunk", {
             chunk: `${chunkNumber}/${totalChunks}`,
             periods: periodChunk,
             orgUnits: orgUnitChunk.length,
             items: dxChunk.length,
+            ...(saved.success ? { reused: true } : {}),
           });
           try {
-            const params = new URLSearchParams();
-            params.append("dimension", `dx:${dxChunk.join(";")}`);
-            params.append("dimension", `pe:${periodChunk.join(";")}`);
-            params.append("dimension", `ou:${orgUnitChunk.join(";")}`);
-            // Analytics rounds to display precision by default; staging should get exact values.
-            params.append("skipRounding", "true");
+            let sourceValues = saved.success ? saved.data.dataValues : undefined;
+            if (sourceValues) {
+              reusedChunks += 1;
+            } else {
+              const params = new URLSearchParams();
+              params.append("dimension", `dx:${dxChunk.join(";")}`);
+              params.append("dimension", `pe:${periodChunk.join(";")}`);
+              params.append("dimension", `ou:${orgUnitChunk.join(";")}`);
+              params.append("skipRounding", "true");
 
-            let raw: unknown;
-            try {
-              raw = (await source.get("analytics/dataValueSet.json", { params })).data;
-            } catch (err) {
-              throw new StepError("Source analytics request failed", {
-                source: "dhis2-route",
-                routeCode,
-                chunk: `${chunkNumber}/${totalChunks}`,
-                description: describeRouteError(err, routeCode),
-              });
-            }
-            const response = sourceDataValueSetSchema.safeParse(raw ?? {});
-            if (!response.success) {
-              throw new Error(
-                `Source analytics returned an unexpected data value set: ${response.error.message}`
-              );
+              let raw: unknown;
+              try {
+                raw = (await source.get("analytics/dataValueSet.json", { params })).data;
+              } catch (err) {
+                throw new StepError("Source analytics request failed", {
+                  source: "dhis2-route",
+                  routeCode,
+                  chunk: `${chunkNumber}/${totalChunks}`,
+                  description: describeRouteError(err, routeCode),
+                });
+              }
+              const response = sourceDataValueSetSchema.safeParse(raw ?? {});
+              if (!response.success) {
+                throw new Error(
+                  `Source analytics returned an unexpected data value set: ${response.error.message}`
+                );
+              }
+              sourceValues = response.data.dataValues;
+              try {
+                await cache.save(key, response.data);
+              } catch (err) {
+                // Only costs a re-download if the step is retried.
+                await task.log("WARN", "Could not save the chunk for retries", {
+                  error: err instanceof Error ? err.message : String(err),
+                });
+              }
             }
 
             let written = 0;
             let unmapped = 0;
-            for (const value of response.data.dataValues) {
+            for (const value of sourceValues) {
               const combo = value.categoryOptionCombo
                 ? comboTarget.get(`${value.dataElement}.${value.categoryOptionCombo}`)
                 : undefined;
@@ -357,7 +398,6 @@ export const dhis2InstancePull: StepHandler = {
                 dataElement: target,
                 period: value.period,
                 orgUnit: value.orgUnit,
-                // Totals carry whatever combo analytics reports; staging stores them under its default.
                 ...(combo ? { categoryOptionCombo: combo.combo } : {}),
                 value: value.value,
               });
@@ -378,6 +418,13 @@ export const dhis2InstancePull: StepHandler = {
       }
     }
 
+    if (reusedChunks > 0) {
+      await ctx.log("INFO", "Reused chunks downloaded by an earlier attempt", {
+        reused: reusedChunks,
+        downloaded: totalChunks - reusedChunks,
+      });
+    }
+
     if (dataValues.length === 0) {
       await ctx.log("WARN", "The source instance returned no values for the requested window", {
         routeCode,
@@ -396,6 +443,11 @@ export const dhis2InstancePull: StepHandler = {
       await writeTask.fail(error);
       throw error;
     }
+    await cache.clear().catch(async (err: unknown) => {
+      await ctx.log("WARN", "Could not delete the saved chunks", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
 
     const output: Dhis2InstancePullOutput = {
       routeCode,

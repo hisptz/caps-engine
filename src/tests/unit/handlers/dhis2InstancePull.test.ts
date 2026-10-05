@@ -17,6 +17,35 @@ vi.mock("@/shared/clients/dhis.ts", async (importOriginal) => {
   };
 });
 
+/** Saved chunks per cache folder, standing in for files under OUTPUTS_DIR. */
+const savedChunks = new Map<string, Map<string, unknown>>();
+
+vi.mock(
+  "@/services/worker/services/handlers/dhis2InstancePull/utils/chunkCache.ts",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("@/services/worker/services/handlers/dhis2InstancePull/utils/chunkCache.ts")
+      >();
+    return {
+      chunkKey: actual.chunkKey,
+      sweepOldChunkFolders: async () => 0,
+      createChunkCache: (dir: string) => {
+        const folder = () => savedChunks.get(dir) ?? savedChunks.set(dir, new Map()).get(dir)!;
+        return {
+          read: async (key: string) => savedChunks.get(dir)?.get(key),
+          save: async (key: string, value: unknown) => {
+            folder().set(key, structuredClone(value));
+          },
+          clear: async () => {
+            savedChunks.delete(dir);
+          },
+        };
+      },
+    };
+  }
+);
+
 const mockBunWrite = vi.fn().mockResolvedValue(0);
 beforeEach(() => {
   stubBun({ write: mockBunWrite });
@@ -196,6 +225,7 @@ function writtenDataValues(): Array<Record<string, string>> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  savedChunks.clear();
   mockBunWrite.mockResolvedValue(0);
   mockStaging();
   mockSource();
@@ -614,6 +644,76 @@ describe("dhis2-instance-pull value types", () => {
     );
     const ctx = buildMockContext({ handlerConfig: baseConfig() });
     await expect(dhis2InstancePull.execute(ctx)).resolves.toMatchObject({ count: 18 });
+  });
+});
+
+describe("dhis2-instance-pull retries", () => {
+  /** One chunk per period; the 202602 chunk fails. */
+  function failFebruary() {
+    const answer = mockSourceGet.getMockImplementation()!;
+    mockSourceGet.mockImplementation(async (url: string, config?: { params?: unknown }) => {
+      if (
+        url === "analytics/dataValueSet.json" &&
+        dimension(config!.params as URLSearchParams, "pe")[0] === "202602"
+      ) {
+        throw new Error("socket hang up");
+      }
+      return answer(url, config) as unknown;
+    });
+  }
+
+  function requestedPeriods(): string[] {
+    return analyticsCalls().map(
+      ([, config]) => dimension((config as { params: URLSearchParams }).params, "pe")[0]!
+    );
+  }
+
+  const config = () => baseConfig({ chunk: { periods: 1, orgUnits: 50 } });
+
+  it("downloads only the failed chunk and the ones after it on a retry", async () => {
+    failFebruary();
+    const first = await dhis2InstancePull
+      .execute(buildMockContext({ handlerConfig: config() }))
+      .catch((e: unknown) => e);
+    expect(first).toBeInstanceOf(StepError);
+    expect(requestedPeriods()).toEqual(["202601", "202602"]);
+
+    mockSourceGet.mockClear();
+    mockSource();
+    const retry = buildMockContext({ handlerConfig: config() });
+    const result = (await dhis2InstancePull.execute(retry)) as Record<string, unknown>;
+
+    expect(requestedPeriods()).toEqual(["202602", "202603"]);
+    expect(result).toMatchObject({ count: 18 });
+    expect(writtenDataValues()).toHaveLength(18);
+    expect(retry.tasks.startTask).toHaveBeenCalledWith(
+      "download-chunk",
+      expect.objectContaining({ chunk: "1/3", reused: true })
+    );
+    expect(retry.log).toHaveBeenCalledWith("INFO", expect.stringContaining("Reused chunks"), {
+      reused: 1,
+      downloaded: 2,
+    });
+  });
+
+  it("deletes the saved chunks once the file is written", async () => {
+    await dhis2InstancePull.execute(buildMockContext({ handlerConfig: config() }));
+    expect(savedChunks.size).toBe(0);
+  });
+
+  it("doesn't reuse chunks from another execution", async () => {
+    failFebruary();
+    await dhis2InstancePull
+      .execute(buildMockContext({ handlerConfig: config() }))
+      .catch(() => undefined);
+
+    mockSourceGet.mockClear();
+    mockSource();
+    const other = buildMockContext({ handlerConfig: config() });
+    other.stepExecution = { ...other.stepExecution, executionId: "execution-2" };
+    await dhis2InstancePull.execute(other);
+
+    expect(requestedPeriods()).toEqual(["202601", "202602", "202603"]);
   });
 });
 
