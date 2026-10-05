@@ -7,6 +7,7 @@ vi.mock("@/shared/clients/dhis.ts", () => ({
 
 import { dhis2RestClient } from "@/shared/clients/dhis.ts";
 import { dhis2AnalyticsRun } from "@/services/worker/services/handlers/dhis2AnalyticsRun/index.ts";
+import { dhis2AnalyticsRunConfigSchema } from "@/services/worker/services/handlers/dhis2AnalyticsRun/schemas/config.ts";
 
 const mockGet = vi.mocked(dhis2RestClient.get);
 const mockPost = vi.mocked(dhis2RestClient.post);
@@ -158,5 +159,17 @@ describe("dhis2-analytics-run handler", () => {
     expect(result.assumedCompleted).toBe(true);
     expect(mockPost).toHaveBeenCalledOnce();
     expect(tasksCallCount).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("dhis2AnalyticsRunConfigSchema defaults", () => {
+  it("skips tracked entities and outliers and rebuilds all years, like the DHIS2 app", () => {
+    for (const config of [
+      dhis2AnalyticsRunConfigSchema.parse({}),
+      dhis2AnalyticsRunConfigSchema.parse({ runOptions: {} }),
+    ]) {
+      expect(config.runOptions).toMatchObject({ skipTrackedEntities: true, skipOutliers: true });
+      expect(config.runOptions.lastYears).toBeUndefined();
+    }
   });
 });

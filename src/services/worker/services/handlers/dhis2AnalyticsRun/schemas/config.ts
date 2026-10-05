@@ -12,9 +12,9 @@ export const dhis2AnalyticsRunConfigSchema = z.object({
       skipEnrollment: z.boolean().default(false),
       skipEvents: z.boolean().default(false),
       skipOrgUnitOwnership: z.boolean().default(false),
-      skipOutliers: z.boolean().default(false),
+      skipOutliers: z.boolean().default(true),
       skipResourceTables: z.boolean().default(false),
-      skipTrackedEntities: z.boolean().default(false),
+      skipTrackedEntities: z.boolean().default(true),
       skipValidationResult: z.boolean().default(false),
     })
     .default({
@@ -22,9 +22,9 @@ export const dhis2AnalyticsRunConfigSchema = z.object({
       skipEnrollment: false,
       skipEvents: false,
       skipOrgUnitOwnership: false,
-      skipOutliers: false,
+      skipOutliers: true,
       skipResourceTables: false,
-      skipTrackedEntities: false,
+      skipTrackedEntities: true,
       skipValidationResult: false,
     }),
 

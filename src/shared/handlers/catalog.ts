@@ -20,7 +20,7 @@ export type HandlerDescriptor = {
 const JSON_SCHEMA_TARGET = "draft-2020-12" as const;
 
 function zodToJsonSchema(schema: ZodType): HandlerJsonSchema {
-  return z.toJSONSchema(schema, { target: JSON_SCHEMA_TARGET }) as HandlerJsonSchema;
+  return z.toJSONSchema(schema, { target: JSON_SCHEMA_TARGET, io: "input" }) as HandlerJsonSchema;
 }
 
 function getRegistryConfigSchema(key: string): ZodType | undefined {

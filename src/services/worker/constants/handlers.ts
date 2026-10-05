@@ -18,6 +18,10 @@ import {
 import { openClimateServiceSyncConfigSchema } from "@/services/worker/services/handlers/openClimateServiceSync/schemas/config.ts";
 import { dhis2DataUploadConfigSchema } from "@/services/worker/services/handlers/dhis2DataUpload/schemas/config.ts";
 import { dhis2AnalyticsRunConfigSchema } from "@/services/worker/services/handlers/dhis2AnalyticsRun/schemas/config.ts";
+import {
+  dhis2InstancePullConfigSchema,
+  dhis2InstancePullContextSchema,
+} from "@/services/worker/services/handlers/dhis2InstancePull/schemas/config.ts";
 import type { ZodType } from "zod";
 
 export type HandlerRegistryEntry = {
@@ -40,6 +44,7 @@ export enum Handlers {
   PREDICTION_TRIGGER = "prediction-trigger",
   PREDICTION_POLL = "prediction-poll",
   PREDICTION_DATA_DOWNLOAD = "prediction-data-download",
+  DHIS2_INSTANCE_PULL = "dhis2-instance-pull",
   DHIS2_DATA_UPLOAD = "dhis2-data-upload",
   DHIS2_ANALYTICS_RUN = "dhis2-analytics-run",
   THRESHOLD_GENERATION = "threshold-generation",
@@ -131,6 +136,21 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       schemas: {
         config: predictionDataDownloadConfigSchema,
       },
+    },
+  ],
+  [
+    Handlers.DHIS2_INSTANCE_PULL,
+    {
+      queueName: "step.dhis2-instance-pull",
+      displayName: "DHIS2 Instance Pull",
+      description:
+        "Pulls aggregate data from another DHIS2 instance through a staging route, into a file for DHIS2 Data Upload",
+      tags: ["dhis2", "pull"],
+      schemas: {
+        config: dhis2InstancePullConfigSchema,
+        context: dhis2InstancePullContextSchema,
+      },
+      contextReplaces: ["period"],
     },
   ],
   [
