@@ -495,7 +495,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/dataset-templates/": {
+    "/features": {
         parameters: {
             query?: never;
             header?: never;
@@ -503,10 +503,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Dataset Templates
-         * @description Return the available dataset templates from the registry.
+         * List Feature Collections
+         * @description List the feature collections this instance holds.
+         *
+         *     Registered collections only. A GeoParquet file placed in the store directory by hand does
+         *     not appear: a record is what brings a collection into existence, so the store directory is
+         *     not an inbox.
          */
-        get: operations["list_dataset_templates_dataset_templates__get"];
+        get: operations["list_feature_collections_features_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -515,7 +519,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/dataset-templates/{dataset_id}": {
+    "/features/{collection_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -523,10 +527,114 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Dataset Template
-         * @description Get a single dataset template by ID with derived coverage metadata.
+         * Get Feature Collection
+         * @description Return one registered feature collection.
          */
-        get: operations["get_dataset_template_dataset_templates__dataset_id__get"];
+        get: operations["get_feature_collection_features__collection_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/features/{collection_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Feature Collection
+         * @description Fetch a feature collection from its template's provider, creating or replacing it.
+         *
+         *     Pass ``Prefer: respond-async`` to queue it as a background job and get 202 with
+         *     ``Location: /ingestions/jobs/{id}``, as for ``POST /ingestions``. Refused with 404 for an
+         *     unknown template and 400 for one naming no provider this instance has, before anything is
+         *     queued; refused on a read-only instance like every other write.
+         */
+        post: operations["refresh_feature_collection_features__collection_id__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/features/{collection_id}/data.parquet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Feature Collection
+         * @description Serve the GeoParquet a published collection is stored as.
+         *
+         *     The href its STAC collection advertises as the `data` asset, so a client that reads the
+         *     catalogue can fetch the bytes it describes. The whole file: windowed reads are the reader's
+         *     job inside a workflow, and a query surface over collections is not this ticket's.
+         *
+         *     The path comes from the registered record — see `published_collection_file_or_404`.
+         */
+        get: operations["download_feature_collection_features__collection_id__data_parquet_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/data-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Data Sources
+         * @description Return the available data sources from the registry.
+         *
+         *     JSON by default. A browser gets the page the rail links to: only a client ranking
+         *     `text/html` above JSON, with `?f=html` and `?f=json` deciding outright.
+         *
+         *     The page is a narrower view than the JSON: it lists what this instance can *fetch*, while
+         *     the JSON lists every data source and flags `ingestable`. A data source produced by a
+         *     workflow is shown under Workflows instead, where the thing that makes it can be seen beside it.
+         *
+         *     Raster data sources come first, then feature collection data sources, each marked with
+         *     `itemType` (`coverage` or `feature`), as datasets are on `GET /datasets`.
+         */
+        get: operations["list_data_sources_data_sources_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/data-sources/{dataset_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Data Source
+         * @description Get a single data source by ID with derived coverage metadata.
+         *
+         *     JSON by default. A browser gets the page, where the data source can also be ingested;
+         *     `?f=html` and `?f=json` choose explicitly.
+         */
+        get: operations["get_data_source_data_sources__dataset_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -545,6 +653,10 @@ export interface paths {
         /**
          * List Datasets
          * @description List managed datasets.
+         *
+         *     JSON by default, as it has always been. A browser gets the page the rail links to, on the
+         *     same terms as a single dataset: only a client ranking `text/html` above JSON, with `?f=html`
+         *     and `?f=json` deciding outright.
          */
         get: operations["list_datasets_datasets_get"];
         put?: never;
@@ -565,8 +677,38 @@ export interface paths {
         /**
          * Get Dataset
          * @description Get managed dataset metadata and available versions.
+         *
+         *     JSON by default. A browser, which ranks `text/html` first, gets the dataset page the landing
+         *     page links to; `?f=html` and `?f=json` choose explicitly.
          */
         get: operations["get_dataset_datasets__dataset_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/datasets/{dataset_id}/thumbnail.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Dataset Thumbnail
+         * @description Serve a dataset's thumbnail, the image its STAC collection points at.
+         *
+         *     404 only when no thumbnail has ever been produced: a dataset not yet ingested, or a first
+         *     render that failed or found nothing to draw. It is a "no preview" answer rather than a
+         *     server fault. A later run that fails to render, or whose chosen slice is entirely missing,
+         *     leaves the previous image in place, so a 200 here can be a run or more stale — see
+         *     `write_dataset_thumbnail`. The STAC collection only advertises the asset when the file is
+         *     there, so a client following a published href does not meet the 404.
+         */
+        get: operations["get_dataset_thumbnail_datasets__dataset_id__thumbnail_png_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -584,7 +726,18 @@ export interface paths {
         };
         /**
          * Download Artifact File
-         * @description Download the primary saved file for a dataset when available.
+         * @description Download the primary saved file for a dataset, for the one format that is a single file.
+         *
+         *     An allowlist rather than a denylist. This used to refuse `zarr` and serve everything else
+         *     as `application/x-netcdf` under a `.nc` filename, which was true while NetCDF was the only
+         *     single-file format left. `GEOPARQUET` broke that assumption: a feature collection is one
+         *     file with a path, so it passed the check and came back as Parquet bytes wearing NetCDF's
+         *     media type and extension — a wrong answer rather than a refusal.
+         *
+         *     Naming the format the response is built for means the next format added is refused here by
+         *     default and has to claim its own branch, which is the failure a caller can act on. Serving
+         *     a feature collection is `GET /features` in CLIM-1068, with the Parquet media type settled
+         *     in CLIM-1069.
          */
         get: operations["download_artifact_file_datasets__dataset_id__download_get"];
         put?: never;
@@ -634,7 +787,7 @@ export interface paths {
         put?: never;
         /**
          * Create Ingestion
-         * @description Create or update a managed dataset from a dataset template and configured extent.
+         * @description Create or update a managed dataset from a data source and the configured extent.
          *
          *     Pass ``Prefer: respond-async`` to queue the ingestion as a background job and
          *     return immediately with 202 + ``Location: /ingestions/jobs/{id}``.
@@ -677,7 +830,7 @@ export interface paths {
          * Get Canonical Zarr Store File
          * @description Serve canonical Zarr store content for a managed dataset.
          */
-        get: operations["get_canonical_zarr_store_file_zarr__dataset_id___relative_path__get"];
+        get: operations["get_canonical_zarr_store_file_zarr__dataset_id___relative_path__head"];
         put?: never;
         post?: never;
         delete?: never;
@@ -686,7 +839,7 @@ export interface paths {
          * Get Canonical Zarr Store File
          * @description Serve canonical Zarr store content for a managed dataset.
          */
-        head: operations["get_canonical_zarr_store_file_zarr__dataset_id___relative_path__get"];
+        head: operations["get_canonical_zarr_store_file_zarr__dataset_id___relative_path__head"];
         patch?: never;
         trace?: never;
     };
@@ -708,7 +861,7 @@ export interface paths {
          *         repo = icechunk.Repository.open(icechunk.http_storage("http://<host>/icechunk/<dataset_id>/"))
          *         ds = zarr.open(repo.readonly_session("main").store, zarr_format=3)
          */
-        get: operations["serve_icechunk_store_file_icechunk__dataset_id___file_path__get"];
+        get: operations["serve_icechunk_store_file_icechunk__dataset_id___file_path__head"];
         put?: never;
         post?: never;
         delete?: never;
@@ -724,7 +877,7 @@ export interface paths {
          *         repo = icechunk.Repository.open(icechunk.http_storage("http://<host>/icechunk/<dataset_id>/"))
          *         ds = zarr.open(repo.readonly_session("main").store, zarr_format=3)
          */
-        head: operations["serve_icechunk_store_file_icechunk__dataset_id___file_path__get"];
+        head: operations["serve_icechunk_store_file_icechunk__dataset_id___file_path__head"];
         patch?: never;
         trace?: never;
     };
@@ -801,6 +954,9 @@ export interface paths {
         /**
          * List Processes
          * @description Return all available openEO processes.
+         *
+         *     The openEO JSON by default, as clients expect. A browser gets the catalogue page the rail
+         *     links to, on the same terms as a single process.
          */
         get: operations["list_processes_processes_get"];
         put?: never;
@@ -821,8 +977,54 @@ export interface paths {
         /**
          * Get Process Spec
          * @description Return one openEO process description by id.
+         *
+         *     JSON by default, as openEO clients expect. A browser, which ranks `text/html` first, gets
+         *     the process page; `?f=html` and `?f=json` choose explicitly.
          */
         get: operations["get_process_spec_processes__process_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exports/{export_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deliver Export
+         * @description Queue delivery of a completed source job's saved export payload.
+         *
+         *     Reusing an idempotency key with identical content returns the existing
+         *     delivery; different content is a conflict.
+         */
+        post: operations["deliver_export_exports__export_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exports/{export_id}/jobs/{delivery_job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Delivery Job
+         * @description Return one delivery job's status and, when finished, its export report.
+         */
+        get: operations["get_delivery_job_exports__export_id__jobs__delivery_job_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -869,7 +1071,7 @@ export interface components {
          * @description Supported stored artifact formats.
          * @enum {string}
          */
-        ArtifactFormat: "zarr" | "netcdf" | "icechunk";
+        ArtifactFormat: "zarr" | "netcdf" | "icechunk" | "geoparquet";
         /**
          * ArtifactRequestScope
          * @description Original request parameters used to create an artifact.
@@ -895,6 +1097,34 @@ export interface components {
                 number,
                 number
             ] | null;
+        };
+        /**
+         * ArtifactVersion
+         * @description A logical release identity: what the release is, and whose scheme names it.
+         *
+         *     The meaningful identity is the pair. A bare "1.0" or "R2025A" says nothing on its own —
+         *     it is `worldpop:R2025A` or `ocs:1.0` that identifies a release — so one namespaced
+         *     concept is carried here rather than parallel `source_version` / `dataset_version` /
+         *     `release_version` fields that would each mean something slightly different.
+         *
+         *     Distinct from the other two identities on a record. `artifact_id` answers "which exact
+         *     materialization is this?" and every artifact has one; this answers "which logical
+         *     release is this?" and only a versioned dataset has one. How an artifact was produced is
+         *     provenance, and a derived artifact does not inherit a version from its inputs — an
+         *     openEO result carries `version=None` unless OCS deliberately releases it, with its
+         *     inputs recorded as provenance rather than folded into this field.
+         */
+        ArtifactVersion: {
+            /**
+             * Value
+             * @description The release identifier itself, verbatim as the authority publishes it (for example 'R2025A' or '2026-08-19.0'). Opaque to OCS: not parsed, ordered, or normalized, because its syntax belongs to the authority. Surrounding whitespace is rejected rather than trimmed, so 'verbatim' stays true and a padded declaration cannot compare unequal to the same release declared cleanly.
+             */
+            value: string;
+            /**
+             * Authority
+             * @description Whose versioning scheme gives `value` its meaning, as a stable machine identifier ('worldpop', 'overture', 'ocs') — never a display label. Compared exactly, and part of the identity, so changing it renames every release under it; choose it once.
+             */
+            authority: string;
         };
         /**
          * CheckOutcome
@@ -954,7 +1184,7 @@ export interface components {
         CreateIngestionRequest: {
             /**
              * Dataset Id
-             * @description Source dataset template id from the Open Climate Service registry.
+             * @description Id of the data source to ingest from, as listed at GET /data-sources.
              */
             dataset_id: string;
             /**
@@ -1013,7 +1243,7 @@ export interface components {
             dataset_id: string;
             /**
              * Source Dataset Id
-             * @description Dataset template id from which this managed dataset was created.
+             * @description Id of the data source this managed dataset was created from.
              */
             source_dataset_id: string;
             /**
@@ -1027,15 +1257,22 @@ export interface components {
              */
             short_name?: string | null;
             /**
-             * Variable
-             * @description Primary raster variable stored in the dataset.
+             * Description
+             * @description Longer prose description from the dataset template, where the caveats about what the values mean belong.
              */
-            variable: string;
+            description?: string | null;
+            /** @description What this dataset holds: 'feature' for a feature collection, 'coverage' for a raster. The one field that lets a client filter a listing without a request per row — `format` sits on the nested version record, which only the detail endpoint returns. Spelled in OGC API - Features' camelCase because the name is borrowed from that specification rather than invented here. */
+            itemType: components["schemas"]["DatasetItemType"];
+            /**
+             * Variable
+             * @description Primary raster variable stored in the dataset. None for a feature collection, which has properties rather than a measured variable.
+             */
+            variable?: string | null;
             /**
              * Period Type
-             * @description Temporal period type of the dataset, for example daily or yearly.
+             * @description Temporal period type of the dataset, for example daily or yearly. None for a dataset with no temporal axis, such as a boundary set.
              */
-            period_type: string;
+            period_type?: string | null;
             /**
              * Units
              * @description Units of the primary variable.
@@ -1056,6 +1293,17 @@ export interface components {
              * @description Upstream source documentation URL.
              */
             source_url?: string | null;
+            /**
+             * License
+             * @description SPDX identifier for the dataset's licence, or 'other' when the licence has no SPDX identifier. Never absent: an undeclared licence reports 'other' rather than something that reads as permissive.
+             * @default other
+             */
+            license: string;
+            /**
+             * License Url
+             * @description URL of the licence text, when known.
+             */
+            license_url?: string | null;
             /** @description Current covered spatial and temporal extent of the dataset. */
             extent: components["schemas"]["ArtifactCoverage"];
             /**
@@ -1077,6 +1325,19 @@ export interface components {
              */
             versions: components["schemas"]["DatasetVersionRecord"][];
         };
+        /**
+         * DatasetItemType
+         * @description What a managed dataset holds, as the public `itemType` discriminator.
+         *
+         *     The field name and the `feature` value are OGC API - Features Part 1, which defines
+         *     `itemType` on the collection object as an "indicator about the type of the items in the
+         *     collection (the default value is 'feature')". `coverage` is convention rather than
+         *     conformance: OGC API - Coverages is a candidate draft and silent on the field. `/datasets`
+         *     is OCS's own API, so borrowing the name buys consistency, not a promise that the rest of
+         *     an OGC collection object is there.
+         * @enum {string}
+         */
+        DatasetItemType: "feature" | "coverage";
         /**
          * DatasetListResponse
          * @description Envelope response for managed datasets.
@@ -1108,6 +1369,7 @@ export interface components {
              *             "start": "2024-01-01"
              *           }
              *         },
+             *         "itemType": "coverage",
              *         "last_updated": "2026-03-27T08:40:24.344473Z",
              *         "links": [
              *           {
@@ -1163,7 +1425,7 @@ export interface components {
             dataset_id: string;
             /**
              * Source Dataset Id
-             * @description Dataset template id from which this managed dataset was created.
+             * @description Id of the data source this managed dataset was created from.
              */
             source_dataset_id: string;
             /**
@@ -1177,15 +1439,22 @@ export interface components {
              */
             short_name?: string | null;
             /**
-             * Variable
-             * @description Primary raster variable stored in the dataset.
+             * Description
+             * @description Longer prose description from the dataset template, where the caveats about what the values mean belong.
              */
-            variable: string;
+            description?: string | null;
+            /** @description What this dataset holds: 'feature' for a feature collection, 'coverage' for a raster. The one field that lets a client filter a listing without a request per row — `format` sits on the nested version record, which only the detail endpoint returns. Spelled in OGC API - Features' camelCase because the name is borrowed from that specification rather than invented here. */
+            itemType: components["schemas"]["DatasetItemType"];
+            /**
+             * Variable
+             * @description Primary raster variable stored in the dataset. None for a feature collection, which has properties rather than a measured variable.
+             */
+            variable?: string | null;
             /**
              * Period Type
-             * @description Temporal period type of the dataset, for example daily or yearly.
+             * @description Temporal period type of the dataset, for example daily or yearly. None for a dataset with no temporal axis, such as a boundary set.
              */
-            period_type: string;
+            period_type?: string | null;
             /**
              * Units
              * @description Units of the primary variable.
@@ -1206,6 +1475,17 @@ export interface components {
              * @description Upstream source documentation URL.
              */
             source_url?: string | null;
+            /**
+             * License
+             * @description SPDX identifier for the dataset's licence, or 'other' when the licence has no SPDX identifier. Never absent: an undeclared licence reports 'other' rather than something that reads as permissive.
+             * @default other
+             */
+            license: string;
+            /**
+             * License Url
+             * @description URL of the licence text, when known.
+             */
+            license_url?: string | null;
             /** @description Current covered spatial and temporal extent of the dataset. */
             extent: components["schemas"]["ArtifactCoverage"];
             /**
@@ -1241,6 +1521,37 @@ export interface components {
             request_scope?: components["schemas"]["ArtifactRequestScope"] | null;
         };
         /**
+         * DeliveryAccepted
+         * @description Accepted delivery job plus links to its status and report.
+         */
+        DeliveryAccepted: {
+            /** Delivery Job Id */
+            delivery_job_id: string;
+            /** Export Id */
+            export_id: string;
+            /** Dry Run */
+            dry_run: boolean;
+            /** Reused */
+            reused: boolean;
+            /** Status Url */
+            status_url: string;
+            /** Report Url */
+            report_url: string;
+        };
+        /**
+         * DeliveryRequest
+         * @description Request body for POST /exports/{export_id}.
+         */
+        DeliveryRequest: {
+            /** Job Id */
+            job_id: string;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+        };
+        /**
          * ExtentRecord
          * @description Configured spatial extent for this Open Climate Service instance.
          */
@@ -1265,6 +1576,101 @@ export interface components {
                 number,
                 number
             ];
+        };
+        /**
+         * FeatureCollectionListResponse
+         * @description Envelope response for registered feature collections.
+         */
+        FeatureCollectionListResponse: {
+            /**
+             * Kind
+             * @description Self-describing envelope type for this collection response.
+             * @default FeatureCollectionList
+             * @example FeatureCollectionList
+             */
+            kind: string;
+            /**
+             * Items
+             * @description Feature collections registered in this Open Climate Service instance. A GeoParquet file in the store directory that nothing registered is not one of these: the listing reads records, never the filesystem.
+             */
+            items?: components["schemas"]["FeatureCollectionRecord"][];
+        };
+        /**
+         * FeatureCollectionRecord
+         * @description One registered feature collection, as `GET /features` reports it.
+         *
+         *     Two kinds of fact meet here. Record-derived ones — count, geometry types, CRS, coverage,
+         *     version — describe what was actually stored, and are answerable for every collection.
+         *     Template-derived ones — licence, attribution, description — describe what the collection
+         *     *is*, and are only as good as the template that declared it.
+         */
+        FeatureCollectionRecord: {
+            /**
+             * Id
+             * @description Stable identifier of the collection, and the name it is loaded by.
+             */
+            id: string;
+            /**
+             * Name
+             * @description Display name of the collection.
+             */
+            name: string;
+            /**
+             * Description
+             * @description Prose from the collection's template, where caveats about what the features mean belong.
+             */
+            description?: string | null;
+            /**
+             * License
+             * @description SPDX identifier for the collection's licence, or 'other' when it has none. Never absent: an undeclared licence reports 'other' rather than something that reads as permissive.
+             * @default other
+             */
+            license: string;
+            /**
+             * License Url
+             * @description URL of the licence text, when known.
+             */
+            license_url?: string | null;
+            /**
+             * Attribution
+             * @description Required attribution for the collection. Not decoration: Overture divisions carry an obligation from the OpenStreetMap data they incorporate.
+             */
+            attribution?: string | null;
+            /**
+             * Id Property
+             * @description Property each feature is identified by. The value that becomes the location column of a DHIS2 or CHAP export, which is why it can never be absent.
+             */
+            id_property: string;
+            /**
+             * Feature Count
+             * @description Number of features stored in the collection.
+             */
+            feature_count: number;
+            /**
+             * Geometry Types
+             * @description Geometry types the stored file declares, for example ['Polygon']. Empty when the file declares none, which is 'not stated' rather than 'no geometry'.
+             */
+            geometry_types?: string[];
+            /**
+             * Primary Geometry
+             * @description Name of the geometry column in the stored file.
+             */
+            primary_geometry: string;
+            /**
+             * Crs
+             * @description Coordinate reference system the geometry is stored in.
+             */
+            crs: string;
+            /** @description Release identity of the stored collection, when its source publishes one. */
+            version?: components["schemas"]["ArtifactVersion"] | null;
+            /** @description Spatial extent of the stored collection. */
+            extent: components["schemas"]["ArtifactCoverage"];
+            /**
+             * Last Updated
+             * Format: date-time
+             * @description When this collection was last written.
+             */
+            last_updated: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1443,18 +1849,6 @@ export interface components {
          * @enum {string}
          */
         JobType: "process";
-        /**
-         * Link
-         * @description Hypermedia link.
-         */
-        Link: {
-            /** Href */
-            href: string;
-            /** Rel */
-            rel: string;
-            /** Title */
-            title: string;
-        };
         /**
          * OpenEOJobCreate
          * @description Request body for POST /jobs.
@@ -1708,10 +2102,10 @@ export interface components {
         SyncDetail: {
             /**
              * Source Dataset Id
-             * @description Source dataset template id used to plan the sync.
+             * @description Id of the data source used to plan the sync.
              */
             source_dataset_id: string;
-            /** @description Sync planning mode declared by the dataset template. */
+            /** @description Sync planning mode the data source declares. */
             sync_kind: components["schemas"]["SyncKind"];
             /** @description Planner-selected sync action. */
             action: components["schemas"]["SyncAction"];
@@ -1745,6 +2139,10 @@ export interface components {
              * @description Where target_end came from, for example request, default_today, request_clamped_by_availability, default_today_clamped_by_availability, or current_coverage.
              */
             target_end_source: string;
+            /** @description Release identity of the currently materialized artifact, read from ArtifactRecord.version. Populated only for sync_kind=release when the artifact carries one; current_end remains the period-domain value used for availability queries even when this is set. */
+            current_version?: components["schemas"]["ArtifactVersion"] | null;
+            /** @description Release identity the template declares as current, for sync_kind=release. */
+            target_version?: components["schemas"]["ArtifactVersion"] | null;
             /**
              * Delta Start
              * @description First missing period planned for append execution, when applicable.
@@ -1840,6 +2238,18 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /**
+         * Link
+         * @description Hypermedia link.
+         */
+        Link: {
+            /** Href */
+            href: string;
+            /** Rel */
+            rel: string;
+            /** Title */
+            title: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -1869,21 +2279,7 @@ export interface operations {
                         /** Message */
                         message: string;
                         /** Links */
-                        links: unknown[];
-                        $defs: {
-                            /**
-                             * Link
-                             * @description Hypermedia link.
-                             */
-                            Link: {
-                                /** Href */
-                                href: string;
-                                /** Rel */
-                                rel: string;
-                                /** Title */
-                                title: string;
-                            };
-                        };
+                        links: components["schemas"]["Link"][];
                     };
                 };
             };
@@ -2671,7 +3067,129 @@ export interface operations {
             };
         };
     };
-    list_dataset_templates_dataset_templates__get: {
+    list_feature_collections_features_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureCollectionListResponse"];
+                };
+            };
+        };
+    };
+    get_feature_collection_features__collection_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureCollectionRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_feature_collection_features__collection_id__refresh_post: {
+        parameters: {
+            query?: {
+                publish?: boolean;
+            };
+            header?: {
+                prefer?: string | null;
+            };
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureCollectionRecord"];
+                };
+            };
+            /** @description Queued; follow the Location header to the job. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_feature_collection_features__collection_id__data_parquet_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_data_sources_data_sources_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2689,11 +3207,12 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                    "text/html": string;
                 };
             };
         };
     };
-    get_dataset_template_dataset_templates__dataset_id__get: {
+    get_data_source_data_sources__dataset_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2713,6 +3232,7 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                    "text/html": string;
                 };
             };
             /** @description Validation Error */
@@ -2742,6 +3262,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DatasetListResponse"];
+                    "text/html": string;
                 };
             };
         };
@@ -2764,7 +3285,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DatasetDetailRecord"];
+                    "text/html": string;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dataset_thumbnail_datasets__dataset_id__thumbnail_png_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2956,7 +3507,7 @@ export interface operations {
             };
         };
     };
-    get_canonical_zarr_store_file_zarr__dataset_id___relative_path__get: {
+    get_canonical_zarr_store_file_zarr__dataset_id___relative_path__head: {
         parameters: {
             query?: never;
             header?: never;
@@ -2988,7 +3539,7 @@ export interface operations {
             };
         };
     };
-    get_canonical_zarr_store_file_zarr__dataset_id___relative_path__get: {
+    get_canonical_zarr_store_file_zarr__dataset_id___relative_path__head: {
         parameters: {
             query?: never;
             header?: never;
@@ -3020,7 +3571,7 @@ export interface operations {
             };
         };
     };
-    serve_icechunk_store_file_icechunk__dataset_id___file_path__get: {
+    serve_icechunk_store_file_icechunk__dataset_id___file_path__head: {
         parameters: {
             query?: never;
             header?: never;
@@ -3052,7 +3603,7 @@ export interface operations {
             };
         };
     };
-    serve_icechunk_store_file_icechunk__dataset_id___file_path__get: {
+    serve_icechunk_store_file_icechunk__dataset_id___file_path__head: {
         parameters: {
             query?: never;
             header?: never;
@@ -3192,6 +3743,7 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                    "text/html": string;
                 };
             };
         };
@@ -3202,6 +3754,78 @@ export interface operations {
             header?: never;
             path: {
                 process_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                    "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deliver_export_exports__export_id__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                export_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliveryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_delivery_job_exports__export_id__jobs__delivery_job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                export_id: string;
+                delivery_job_id: string;
             };
             cookie?: never;
         };

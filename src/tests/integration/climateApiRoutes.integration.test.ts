@@ -43,53 +43,82 @@ async function expectApiError(promise: Promise<unknown>): Promise<ApiError> {
   throw new Error("expected promise to reject with an ApiError");
 }
 
-describe("ClimateService.listDatasets", () => {
+describe("ClimateService.listCollections", () => {
   beforeEach(() => {
     mockGet.mockReset();
   });
 
-  it("returns the datasets payload on success", async () => {
-    const payload = {
-      kind: "DatasetList",
-      items: [{ dataset_id: "chirps3_precipitation_daily_sle" }],
-    };
-    mockGet.mockResolvedValueOnce({ data: payload });
+  const catalog = {
+    type: "Catalog",
+    links: [
+      { rel: "self", href: "http://ocs.example/stac" },
+      { rel: "child", href: "http://ocs.example/stac/collections/chirps3_precipitation_daily" },
+      { rel: "child", href: "http://ocs.example/stac/collections/era5_land_temperature/" },
+    ],
+  };
 
-    const result = await climateService.listDatasets();
+  it("follows each child link of the catalogue", async () => {
+    mockGet
+      .mockResolvedValueOnce({ data: catalog })
+      .mockResolvedValueOnce({ data: { id: "chirps3_precipitation_daily" } })
+      .mockResolvedValueOnce({ data: { id: "era5_land_temperature" } });
 
-    expect(result).toEqual(payload);
-    expect(mockGet).toHaveBeenCalledWith("/datasets");
+    const result = await climateService.listCollections();
+
+    expect(result).toEqual({
+      collections: [{ id: "chirps3_precipitation_daily" }, { id: "era5_land_temperature" }],
+    });
+    expect(mockGet).toHaveBeenNthCalledWith(1, "/stac");
+    expect(mockGet).toHaveBeenCalledWith("/stac/collections/chirps3_precipitation_daily");
+    expect(mockGet).toHaveBeenCalledWith("/stac/collections/era5_land_temperature");
   });
 
-  it("throws a 502 ApiError when upstream is unavailable", async () => {
+  it("skips a collection that fails to load", async () => {
+    mockGet
+      .mockResolvedValueOnce({ data: catalog })
+      .mockRejectedValueOnce(makeAxiosError(503))
+      .mockResolvedValueOnce({ data: { id: "era5_land_temperature" } });
+
+    const result = await climateService.listCollections();
+
+    expect(result).toEqual({ collections: [{ id: "era5_land_temperature" }] });
+  });
+
+  it("returns no collections for an empty catalogue", async () => {
+    mockGet.mockResolvedValueOnce({ data: { type: "Catalog", links: [] } });
+
+    expect(await climateService.listCollections()).toEqual({ collections: [] });
+  });
+
+  it("throws a 502 ApiError when the catalogue is unavailable", async () => {
     mockGet.mockRejectedValueOnce(makeAxiosError(502));
 
-    const err = await expectApiError(climateService.listDatasets());
+    const err = await expectApiError(climateService.listCollections());
 
     expect(err.status).toBe(502);
     expect(err.code).toBe("climate_api_unavailable");
   });
 });
 
-describe("ClimateService.getDataset", () => {
+describe("ClimateService.getCollection", () => {
   beforeEach(() => {
     mockGet.mockReset();
   });
 
-  it("returns dataset detail on success", async () => {
-    const detail = { dataset_id: "chirps3_precipitation_daily_sle", variable: "precip" };
-    mockGet.mockResolvedValueOnce({ data: detail });
+  it("returns the STAC collection on success", async () => {
+    const collection = { type: "Collection", id: "chirps3_precipitation_daily" };
+    mockGet.mockResolvedValueOnce({ data: collection });
 
-    const result = await climateService.getDataset("chirps3_precipitation_daily_sle");
+    const result = await climateService.getCollection("chirps3_precipitation_daily");
 
-    expect(result).toEqual(detail);
-    expect(mockGet).toHaveBeenCalledWith("/datasets/chirps3_precipitation_daily_sle");
+    expect(result).toEqual(collection);
+    expect(mockGet).toHaveBeenCalledWith("/stac/collections/chirps3_precipitation_daily");
   });
 
-  it("throws a 404 ApiError when dataset is not found", async () => {
+  it("throws a 404 ApiError when the collection is not published", async () => {
     mockGet.mockRejectedValueOnce(makeAxiosError(404));
 
-    const err = await expectApiError(climateService.getDataset("missing"));
+    const err = await expectApiError(climateService.getCollection("missing"));
 
     expect(err.status).toBe(404);
     expect(err.code).toBe("dataset_not_found");
@@ -99,42 +128,42 @@ describe("ClimateService.getDataset", () => {
   it("throws a 502 ApiError on upstream error", async () => {
     mockGet.mockRejectedValueOnce(makeAxiosError(502));
 
-    const err = await expectApiError(climateService.getDataset("x"));
+    const err = await expectApiError(climateService.getCollection("x"));
 
     expect(err.status).toBe(502);
     expect(err.code).toBe("climate_api_unavailable");
   });
 });
 
-describe("ClimateService.listDatasetTemplates", () => {
+describe("ClimateService.listDataSources", () => {
   beforeEach(() => {
     mockGet.mockReset();
   });
 
-  it("returns templates on success", async () => {
+  it("returns data sources on success", async () => {
     const templates = [{ dataset_id: "chirps3_precipitation_daily" }];
     mockGet.mockResolvedValueOnce({ data: templates });
 
-    const result = await climateService.listDatasetTemplates();
+    const result = await climateService.listDataSources();
 
     expect(result).toEqual(templates);
-    expect(mockGet).toHaveBeenCalledWith("/dataset-templates/");
+    expect(mockGet).toHaveBeenCalledWith("/data-sources");
   });
 });
 
-describe("ClimateService.getDatasetTemplate", () => {
+describe("ClimateService.getDataSource", () => {
   beforeEach(() => {
     mockGet.mockReset();
   });
 
-  it("returns template detail on success", async () => {
+  it("returns data source detail on success", async () => {
     const template = { dataset_id: "chirps3_precipitation_daily" };
     mockGet.mockResolvedValueOnce({ data: template });
 
-    const result = await climateService.getDatasetTemplate("chirps3_precipitation_daily");
+    const result = await climateService.getDataSource("chirps3_precipitation_daily");
 
     expect(result).toEqual(template);
-    expect(mockGet).toHaveBeenCalledWith("/dataset-templates/chirps3_precipitation_daily");
+    expect(mockGet).toHaveBeenCalledWith("/data-sources/chirps3_precipitation_daily");
   });
 });
 

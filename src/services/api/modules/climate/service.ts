@@ -15,16 +15,39 @@ import type {
   SyncDatasetBody,
 } from "@/services/api/modules/climate/model.ts";
 
+type StacCatalog = { links?: Array<{ rel: string; href: string }> };
+
+function collectionIdFromHref(href: string): string | null {
+  const segment = href.split(/[?#]/)[0]?.replace(/\/+$/, "").split("/").pop();
+  return segment ? decodeURIComponent(segment) : null;
+}
+
 export class ClimateService {
-  async listDatasets(): Promise<unknown> {
-    return handleClimateRequest(
-      async (): Promise<unknown> => (await climateApiClient.get("/datasets")).data
-    );
+  async listCollections(): Promise<{ collections: unknown[] }> {
+    return handleClimateRequest(async () => {
+      const catalog = (await climateApiClient.get<StacCatalog>("/stac")).data;
+      const ids = (catalog.links ?? [])
+        .filter((link) => link.rel === "child")
+        .map((link) => collectionIdFromHref(link.href))
+        .filter((id): id is string => Boolean(id));
+      const results = await Promise.allSettled(
+        ids.map(
+          async (id) =>
+            (await climateApiClient.get<unknown>(`/stac/collections/${encodeURIComponent(id)}`))
+              .data
+        )
+      );
+      return {
+        collections: results.flatMap((result) =>
+          result.status === "fulfilled" ? [result.value] : []
+        ),
+      };
+    });
   }
 
-  async getDataset(id: string): Promise<unknown> {
+  async getCollection(id: string): Promise<unknown> {
     try {
-      const response = await climateApiClient.get(`/datasets/${encodeURIComponent(id)}`);
+      const response = await climateApiClient.get(`/stac/collections/${encodeURIComponent(id)}`);
       return response.data as unknown;
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.status === 404) {
@@ -38,17 +61,17 @@ export class ClimateService {
     }
   }
 
-  async listDatasetTemplates(): Promise<unknown> {
+  async listDataSources(): Promise<unknown> {
     return handleClimateRequest(
-      async (): Promise<unknown> => (await climateApiClient.get("/dataset-templates/")).data
+      async (): Promise<unknown> => (await climateApiClient.get("/data-sources")).data
     );
   }
 
-  async getDatasetTemplate(id: string): Promise<unknown> {
+  async getDataSource(id: string): Promise<unknown> {
     return handleClimateRequest(
       async (): Promise<unknown> =>
-        (await climateApiClient.get(`/dataset-templates/${encodeURIComponent(id)}`)).data,
-      { notFoundDetails: { datasetTemplateId: id } }
+        (await climateApiClient.get(`/data-sources/${encodeURIComponent(id)}`)).data,
+      { notFoundDetails: { dataSourceId: id } }
     );
   }
 

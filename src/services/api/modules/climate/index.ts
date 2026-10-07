@@ -2,7 +2,7 @@ import { Elysia } from "elysia";
 import { ClimateService } from "@/services/api/modules/climate/service.ts";
 import {
   datasetIdParams,
-  datasetTemplateIdParams,
+  dataSourceIdParams,
   ingestionIdParams,
   jobIdParams,
   syncDatasetIdParams,
@@ -15,50 +15,51 @@ import {
 const climateService = new ClimateService();
 
 export const climateModule = new Elysia({ prefix: "/climate", tags: ["climate"] })
-  .get("/datasets", () => climateService.listDatasets(), {
+  .get("/collections", () => climateService.listCollections(), {
     detail: {
-      summary: "List climate datasets",
-      description: "List managed datasets from the configured climate-api service",
-      operationId: "listClimateDatasets",
+      summary: "List climate collections",
+      description:
+        "List published collections from the climate-api STAC catalogue. Datasets appear here once ingestion has published them.",
+      operationId: "listClimateCollections",
       responses: {
-        "200": { description: "List of managed datasets" },
+        "200": { description: "STAC collections, as `{ collections: [...] }`" },
         "502": { description: "Climate API service unavailable" },
       },
     },
   })
-  .get("/datasets/:id", ({ params }) => climateService.getDataset(params.id), {
+  .get("/collections/:id", ({ params }) => climateService.getCollection(params.id), {
     params: datasetIdParams,
     detail: {
-      summary: "Get climate dataset",
-      description: "Get one managed dataset from the configured climate-api service",
-      operationId: "getClimateDataset",
+      summary: "Get climate collection",
+      description: "Get one published STAC collection from the climate-api catalogue",
+      operationId: "getClimateCollection",
       responses: {
-        "200": { description: "Dataset detail" },
-        "404": { description: "Dataset not found" },
+        "200": { description: "STAC collection" },
+        "404": { description: "Collection not found" },
         "502": { description: "Climate API service unavailable" },
       },
     },
   })
-  .get("/dataset-templates", () => climateService.listDatasetTemplates(), {
+  .get("/data-sources", () => climateService.listDataSources(), {
     detail: {
-      summary: "List dataset templates",
-      description: "Return available dataset templates from the climate-api registry",
-      operationId: "listClimateDatasetTemplates",
+      summary: "List data sources",
+      description: "Return the data sources the climate-api can ingest from",
+      operationId: "listClimateDataSources",
       responses: {
-        "200": { description: "List of dataset templates" },
+        "200": { description: "List of data sources" },
         "502": { description: "Climate API service unavailable" },
       },
     },
   })
-  .get("/dataset-templates/:id", ({ params }) => climateService.getDatasetTemplate(params.id), {
-    params: datasetTemplateIdParams,
+  .get("/data-sources/:id", ({ params }) => climateService.getDataSource(params.id), {
+    params: dataSourceIdParams,
     detail: {
-      summary: "Get dataset template",
-      description: "Get a single dataset template by ID with derived coverage metadata",
-      operationId: "getClimateDatasetTemplate",
+      summary: "Get data source",
+      description: "Get a single data source by ID with derived coverage metadata",
+      operationId: "getClimateDataSource",
       responses: {
-        "200": { description: "Dataset template detail" },
-        "404": { description: "Dataset template not found" },
+        "200": { description: "Data source detail" },
+        "404": { description: "Data source not found" },
         "502": { description: "Climate API service unavailable" },
       },
     },
@@ -80,7 +81,7 @@ export const climateModule = new Elysia({ prefix: "/climate", tags: ["climate"] 
     detail: {
       summary: "Create ingestion",
       description:
-        "Create or update a managed dataset from a dataset template. Use ?async=true (default) to queue as a background job.",
+        "Create or update a managed dataset from a data source. Use ?async=true (default) to queue as a background job.",
       operationId: "createClimateIngestion",
       responses: {
         "200": { description: "Ingestion accepted (async) or completed (sync)" },
