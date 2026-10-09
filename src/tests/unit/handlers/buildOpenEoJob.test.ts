@@ -4,7 +4,7 @@ import type { ClimateOpenEoConfig } from "@/services/worker/services/handlers/cl
 
 const config: ClimateOpenEoConfig = {
   datasetId: "era5land_precipitation_monthly",
-  variable: { dataElement: "AbCdEfGhIjK" },
+  exportId: "rainfall-monthly",
   aggregation: { method: "sum" },
   period: { periodType: "monthly", id: "202601" },
   orgUnit: { ids: ["OU_ALPHA"] },
@@ -43,7 +43,6 @@ describe("buildOpenEoJobBody", () => {
     };
     expect(graph.arguments).toMatchObject({
       temporal_extent: ["2024-05-01", "2026-07-31"],
-      period_type: "month",
     });
   });
 
@@ -61,9 +60,8 @@ describe("buildOpenEoJobBody", () => {
     expect(graph.arguments).toMatchObject({
       dataset_id: "era5land_precipitation_monthly",
       temporal_extent: ["2026-01-01", "2026-01-31"],
-      data_element_id: "AbCdEfGhIjK",
+      export: "rainfall-monthly",
       method: "sum",
-      period_type: "month",
       geometries,
     });
   });
