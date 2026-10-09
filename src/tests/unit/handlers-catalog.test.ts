@@ -177,7 +177,7 @@ describe("handler config JSON Schema round-trip", () => {
   it("climate-openeo-create round-trips valid structural config", () => {
     const valid = {
       datasetId: "x",
-      variable: { dataElement: "abcdefghijk" },
+      exportId: "x-daily",
       aggregation: { method: "mean" as const },
       period: { periodType: "daily" as const, id: "20240101" },
       orgUnit: { ids: ["ou1"] },
