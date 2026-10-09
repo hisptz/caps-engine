@@ -21,7 +21,7 @@ const mockStartJob = vi.mocked(startOpenEoJob);
 function baseHandlerConfig(): Record<string, unknown> {
   return {
     datasetId: "era5land_precipitation_monthly",
-    variable: { dataElement: "AbCdEfGhIjK" },
+    exportId: "rainfall-monthly",
     aggregation: { method: "mean" },
     period: { periodType: "monthly", id: "202601" },
     orgUnit: { ids: ["OU_ALPHA"] },

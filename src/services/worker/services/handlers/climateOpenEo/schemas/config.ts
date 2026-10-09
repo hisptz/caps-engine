@@ -2,9 +2,11 @@ import { z } from "zod";
 
 export const climateOpenEoConfigSchema = z.object({
   datasetId: z.string().min(1),
-  variable: z.object({
-    dataElement: z.string().regex(/^[A-Za-z0-9]{11}$/),
-  }),
+  /**
+   * Named DHIS2 export declared under `exports` in the Open Climate Service instance
+   * config. It owns the data element mapping and the period type of the dataValueSet.
+   */
+  exportId: z.string().regex(/^[A-Za-z0-9_-]+$/),
   aggregation: z.object({
     method: z.enum(["mean", "min", "max", "sum"]),
   }),
