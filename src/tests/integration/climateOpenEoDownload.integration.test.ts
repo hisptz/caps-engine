@@ -63,6 +63,9 @@ describe("climateOpenEoDownload", () => {
     expect(result.jobId).toBe("job-123");
     expect(result.count).toBe(1);
     expect(result.filename).toMatch(/^climate-openeo-/);
+    expect(mockResolveFilename).toHaveBeenCalledWith({
+      assets: { "result.dhis2.json": { href: "/jobs/job-123/results/result.dhis2.json" } },
+    });
     expect(mockDownload).toHaveBeenCalledWith("job-123", "result.dhis2.json");
     expect(mockBunWrite).toHaveBeenCalledOnce();
   });
