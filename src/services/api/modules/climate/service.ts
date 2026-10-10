@@ -5,7 +5,7 @@ import {
   normalizeAsyncPostResponse,
 } from "@/services/api/utils/climate/async.ts";
 import {
-  datasetNotFoundError,
+  collectionNotFoundError,
   mapClimateAxiosError,
   handleClimateRequest,
 } from "@/services/api/utils/climate/errors.ts";
@@ -51,9 +51,9 @@ export class ClimateService {
       return response.data as unknown;
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.status === 404) {
-        throw datasetNotFoundError(id);
+        throw collectionNotFoundError(id);
       }
-      const mapped = mapClimateAxiosError(err, { datasetId: id });
+      const mapped = mapClimateAxiosError(err, { collectionId: id });
       if (mapped) {
         throw mapped;
       }

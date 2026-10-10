@@ -19,12 +19,12 @@ export function climateResourceNotFoundError(details?: unknown): ApiError {
   );
 }
 
-export function datasetNotFoundError(datasetId: string): ApiError {
+export function collectionNotFoundError(collectionId: string): ApiError {
   return apiError(
     404,
-    ApiErrorCode.DATASET_NOT_FOUND,
-    `Dataset '${datasetId}' was not found in the climate API service.`,
-    { datasetId }
+    ApiErrorCode.COLLECTION_NOT_FOUND,
+    `Collection '${collectionId}' was not found in the climate API STAC catalogue.`,
+    { collectionId }
   );
 }
 

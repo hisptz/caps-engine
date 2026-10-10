@@ -1,7 +1,7 @@
 import { Elysia } from "elysia";
 import { ClimateService } from "@/services/api/modules/climate/service.ts";
 import {
-  datasetIdParams,
+  collectionIdParams,
   dataSourceIdParams,
   ingestionIdParams,
   jobIdParams,
@@ -28,7 +28,7 @@ export const climateModule = new Elysia({ prefix: "/climate", tags: ["climate"] 
     },
   })
   .get("/collections/:id", ({ params }) => climateService.getCollection(params.id), {
-    params: datasetIdParams,
+    params: collectionIdParams,
     detail: {
       summary: "Get climate collection",
       description: "Get one published STAC collection from the climate-api catalogue",

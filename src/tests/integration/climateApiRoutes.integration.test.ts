@@ -121,8 +121,8 @@ describe("ClimateService.getCollection", () => {
     const err = await expectApiError(climateService.getCollection("missing"));
 
     expect(err.status).toBe(404);
-    expect(err.code).toBe("dataset_not_found");
-    expect(err.details).toEqual({ datasetId: "missing" });
+    expect(err.code).toBe("collection_not_found");
+    expect(err.details).toEqual({ collectionId: "missing" });
   });
 
   it("throws a 502 ApiError on upstream error", async () => {
