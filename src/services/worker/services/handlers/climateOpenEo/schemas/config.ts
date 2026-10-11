@@ -1,22 +1,35 @@
 import { z } from "zod";
 
-export const climateOpenEoConfigSchema = z.object({
-  datasetId: z.string().min(1),
-  variable: z.object({
-    dataElement: z.string().regex(/^[A-Za-z0-9]{11}$/),
-  }),
-  aggregation: z.object({
-    method: z.enum(["mean", "min", "max", "sum"]),
-  }),
-  period: z.object({
+const periodSchema = z
+  .object({
     periodType: z.enum(["daily", "weekly", "monthly"]),
-    /** First period covered by the run. */
-    id: z.string().min(1),
+    /** First period covered by the run. Takes precedence over `lastDays`. */
+    id: z.string().min(1).optional(),
     /**
      * Last period covered by the run. Omitted for a single-period run
      */
     endId: z.string().min(1).optional(),
+    /**
+     * Without `id`: cover the `lastDays` days up to and including yesterday (UTC), worked
+     * out when the step runs, so a scheduled pipeline picks up recent and revised data.
+     */
+    lastDays: z.number().int().positive().optional(),
+  })
+  .refine((p) => p.id !== undefined || p.lastDays !== undefined, {
+    message: "Either id or lastDays must be set",
+  });
+
+export const climateOpenEoConfigSchema = z.object({
+  datasetId: z.string().min(1),
+  /**
+   * Named DHIS2 export declared under `exports` in the Open Climate Service instance
+   * config. It owns the data element mapping and the period type of the dataValueSet.
+   */
+  exportId: z.string().regex(/^[A-Za-z0-9_-]+$/),
+  aggregation: z.object({
+    method: z.enum(["mean", "min", "max", "sum"]),
   }),
+  period: periodSchema,
   orgUnit: z
     .object({
       levels: z.array(z.string()).optional(),
@@ -30,11 +43,7 @@ export const climateOpenEoConfigSchema = z.object({
 export type ClimateOpenEoConfig = z.infer<typeof climateOpenEoConfigSchema>;
 
 export const climateOpenEoContextSchema = z.object({
-  period: z.object({
-    periodType: z.enum(["daily", "weekly", "monthly"]),
-    id: z.string(),
-    endId: z.string().min(1).optional(),
-  }),
+  period: periodSchema,
   orgUnit: z
     .object({
       levels: z.array(z.string()).optional(),

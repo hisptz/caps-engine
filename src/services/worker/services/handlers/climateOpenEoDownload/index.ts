@@ -34,8 +34,8 @@ export const climateOpenEoDownload: StepHandler = {
     const downloadTask = await ctx.tasks.startTask("download-result", { jobId });
     let dataValueSet;
     try {
-      await getOpenEoJobResults(jobId);
-      const resultFilename = resolveResultFilename();
+      const results = await getOpenEoJobResults(jobId);
+      const resultFilename = resolveResultFilename(results);
       const raw = await downloadOpenEoJobResult(jobId, resultFilename);
       const parsed = dataValueSetSchema.safeParse(raw);
       if (!parsed.success) {
