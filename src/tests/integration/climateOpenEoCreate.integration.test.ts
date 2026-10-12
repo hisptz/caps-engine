@@ -29,6 +29,29 @@ function baseHandlerConfig(): Record<string, unknown> {
 }
 
 const pointGeometry = { type: "Point" as const, coordinates: [10, 20] };
+const polygonGeometry = {
+  type: "Polygon" as const,
+  coordinates: [
+    [
+      [10, 20],
+      [11, 20],
+      [11, 21],
+      [10, 20],
+    ],
+  ],
+};
+
+function orgUnitFeature(
+  id: string,
+  geometry: typeof pointGeometry | typeof polygonGeometry | null
+) {
+  return {
+    id,
+    type: "Feature" as const,
+    properties: { id, level: "3", parent: "P1", parentGraph: "P1", displayName: id },
+    geometry,
+  };
+}
 
 describe("climateOpenEoCreate", () => {
   beforeEach(() => {
@@ -46,7 +69,7 @@ describe("climateOpenEoCreate", () => {
             parentGraph: "P1",
             displayName: "Alpha",
           },
-          geometry: pointGeometry,
+          geometry: polygonGeometry,
         },
       ],
     });
@@ -79,5 +102,61 @@ describe("climateOpenEoCreate", () => {
     await expect(climateOpenEoCreate.execute(ctx)).rejects.toThrow(
       "Invalid climateOpenEoCreate config"
     );
+  });
+
+  it("skips point org units and sends only areas", async () => {
+    mockGetOrgUnits.mockResolvedValue({
+      type: "FeatureCollection",
+      features: [
+        orgUnitFeature("OU_ALPHA", polygonGeometry),
+        orgUnitFeature("OU_HOSPITAL", pointGeometry),
+        orgUnitFeature("OU_NOGEOM", null),
+      ],
+    });
+    const orgUnitsTask = buildMockTaskHandle();
+    const ctx = buildMockContext({
+      handlerConfig: baseHandlerConfig(),
+      tasks: {
+        startTask: vi
+          .fn()
+          .mockResolvedValueOnce(orgUnitsTask)
+          .mockResolvedValue(buildMockTaskHandle()),
+      },
+    });
+
+    await climateOpenEoCreate.execute(ctx);
+
+    const graph = mockCreateJob.mock.calls[0]![0].process.process_graph.agg as {
+      arguments: { geometries: { features: Array<{ id: string }> } };
+    };
+    expect(graph.arguments.geometries.features.map((f) => f.id)).toEqual(["OU_ALPHA"]);
+    expect(ctx.log).toHaveBeenCalledWith(
+      "WARN",
+      expect.stringContaining("not areas"),
+      expect.objectContaining({
+        skippedOrgUnits: [{ id: "OU_HOSPITAL", name: "OU_HOSPITAL", geometryType: "Point" }],
+        skippedCount: 1,
+      })
+    );
+    expect(orgUnitsTask.succeed).toHaveBeenCalledWith({
+      featureCount: 3,
+      processableCount: 1,
+      skippedCount: 2,
+      skippedWithoutGeometryCount: 1,
+      skippedNonAreaCount: 1,
+    });
+  });
+
+  it("fails clearly when every org unit is a point", async () => {
+    mockGetOrgUnits.mockResolvedValue({
+      type: "FeatureCollection",
+      features: [orgUnitFeature("OU_HOSPITAL", pointGeometry)],
+    });
+    const ctx = buildMockContext({ handlerConfig: baseHandlerConfig() });
+
+    await expect(climateOpenEoCreate.execute(ctx)).rejects.toThrow(
+      "No organisation units with an area"
+    );
+    expect(mockCreateJob).not.toHaveBeenCalled();
   });
 });
