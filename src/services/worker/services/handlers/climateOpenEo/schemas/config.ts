@@ -19,26 +19,44 @@ const periodSchema = z
     message: "Either id or lastDays must be set",
   });
 
-export const climateOpenEoConfigSchema = z.object({
-  datasetId: z.string().min(1),
-  /**
-   * Named DHIS2 export declared under `exports` in the Open Climate Service instance
-   * config. It owns the data element mapping and the period type of the dataValueSet.
-   */
-  exportId: z.string().regex(/^[A-Za-z0-9_-]+$/),
-  aggregation: z.object({
-    method: z.enum(["mean", "min", "max", "sum"]),
-  }),
-  period: periodSchema,
-  orgUnit: z
-    .object({
-      levels: z.array(z.string()).optional(),
-      ids: z.array(z.string()).optional(),
-    })
-    .refine((o) => (o.levels && o.levels.length > 0) || (o.ids && o.ids.length > 0), {
-      message: "At least one of levels or ids must be non-empty",
+export const climateOpenEoConfigSchema = z
+  .object({
+    datasetId: z.string().min(1),
+    /**
+     * Named DHIS2 export declared under `exports` in the Open Climate Service instance
+     * config. It owns the data element mapping and the period type of the dataValueSet.
+     * Same id rule as OCS (`exports/service.py`).
+     */
+    exportId: z
+      .string()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/)
+      .optional(),
+    /**
+     * Data element the values are written to, mapped in CAPS rather than in OCS config.
+     * Rendered with OCS's ad-hoc `save_result` DHIS2JSON options.
+     */
+    variable: z
+      .object({
+        dataElement: z.string().regex(/^[A-Za-z0-9]{11}$/),
+      })
+      .optional(),
+    aggregation: z.object({
+      method: z.enum(["mean", "min", "max", "sum"]),
     }),
-});
+    period: periodSchema,
+    orgUnit: z
+      .object({
+        levels: z.array(z.string()).optional(),
+        ids: z.array(z.string()).optional(),
+      })
+      .refine((o) => (o.levels && o.levels.length > 0) || (o.ids && o.ids.length > 0), {
+        message: "At least one of levels or ids must be non-empty",
+      }),
+  })
+  .refine((c) => (c.exportId === undefined) !== (c.variable === undefined), {
+    message: "Set exactly one of exportId or variable.dataElement",
+    path: ["exportId"],
+  });
 
 export type ClimateOpenEoConfig = z.infer<typeof climateOpenEoConfigSchema>;
 

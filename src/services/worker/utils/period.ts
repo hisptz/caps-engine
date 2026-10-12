@@ -42,3 +42,16 @@ export function temporalExtentFromPeriod(
     formatIsoDate(new Date(endPeriod.endDate)),
   ];
 }
+
+export function openEoPeriodTypeFromConfig(
+  periodType: ClimatePeriodConfig["periodType"]
+): "day" | "week" | "month" {
+  switch (periodType) {
+    case "daily":
+      return "day";
+    case "weekly":
+      return "week";
+    case "monthly":
+      return "month";
+  }
+}

@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { climateOpenEoConfigSchema } from "@/services/worker/services/handlers/climateOpenEo/schemas/config.ts";
-import { temporalExtentFromPeriod } from "@/services/worker/utils/period.ts";
+import {
+  openEoPeriodTypeFromConfig,
+  temporalExtentFromPeriod,
+} from "@/services/worker/utils/period.ts";
 
 function baseConfig(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -45,7 +48,31 @@ describe("climateOpenEoConfigSchema", () => {
   });
 
   it("fails for an export id OCS would not accept", () => {
-    const cfg = baseConfig({ exportId: "rainfall monthly" });
+    expect(
+      climateOpenEoConfigSchema.safeParse(baseConfig({ exportId: "rainfall monthly" })).success
+    ).toBe(false);
+    expect(climateOpenEoConfigSchema.safeParse(baseConfig({ exportId: "-rainfall" })).success).toBe(
+      false
+    );
+  });
+
+  it("passes with a data element instead of an export", () => {
+    const cfg = baseConfig({ exportId: undefined, variable: { dataElement: "QRvJclmKq2g" } });
+    expect(climateOpenEoConfigSchema.safeParse(cfg).success).toBe(true);
+  });
+
+  it("fails with both an export and a data element", () => {
+    const cfg = baseConfig({ variable: { dataElement: "QRvJclmKq2g" } });
+    expect(climateOpenEoConfigSchema.safeParse(cfg).success).toBe(false);
+  });
+
+  it("fails with neither an export nor a data element", () => {
+    const cfg = baseConfig({ exportId: undefined });
+    expect(climateOpenEoConfigSchema.safeParse(cfg).success).toBe(false);
+  });
+
+  it("fails for an invalid data element id", () => {
+    const cfg = baseConfig({ exportId: undefined, variable: { dataElement: "short" } });
     expect(climateOpenEoConfigSchema.safeParse(cfg).success).toBe(false);
   });
 });
@@ -73,5 +100,13 @@ describe("temporalExtentFromPeriod", () => {
         now
       )
     ).toEqual(["2018-01-01", "2018-12-31"]);
+  });
+});
+
+describe("openEoPeriodTypeFromConfig", () => {
+  it("maps period types to openEO period_type values", () => {
+    expect(openEoPeriodTypeFromConfig("daily")).toBe("day");
+    expect(openEoPeriodTypeFromConfig("weekly")).toBe("week");
+    expect(openEoPeriodTypeFromConfig("monthly")).toBe("month");
   });
 });
