@@ -80,6 +80,7 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
         config: climateOpenEoConfigSchema,
         context: climateOpenEoContextSchema,
       },
+      contextReplaces: ["period", "orgUnit"],
     },
   ],
   [

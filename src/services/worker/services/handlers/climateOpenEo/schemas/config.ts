@@ -1,22 +1,50 @@
 import { z } from "zod";
+import type { ClimatePeriodType } from "@/services/worker/utils/period.ts";
+
+const periodTypeSchema = z.enum(["daily", "weekly", "monthly"]);
+
+/** Longest rolling window per period type: about a year of days, two years of weeks, three of months. */
+export const MAX_ROLLING_COUNT: Record<ClimatePeriodType, number> = {
+  daily: 400,
+  weekly: 104,
+  monthly: 36,
+};
+
+const fixedPeriodSchema = z.strictObject({
+  mode: z.literal("fixed").optional(),
+  periodType: periodTypeSchema,
+  /** First period covered by the run. */
+  id: z.string().min(1),
+  /** Last period covered by the run. Omitted for a single-period run. */
+  endId: z.string().min(1).optional(),
+});
+
+const rollingPeriodSchema = z.strictObject({
+  mode: z.literal("rolling"),
+  periodType: periodTypeSchema,
+  count: z.number().int().min(1),
+  /** Periods skipped at the end; 1 (the default) stops at the last complete period. */
+  offset: z.number().int().min(0).max(366).optional(),
+});
+
+/** Earlier form of a daily rolling window ending yesterday, kept for existing configs. */
+const lastDaysPeriodSchema = z.strictObject({
+  periodType: z.literal("daily"),
+  lastDays: z.number().int().min(1),
+});
 
 const periodSchema = z
-  .object({
-    periodType: z.enum(["daily", "weekly", "monthly"]),
-    /** First period covered by the run. Takes precedence over `lastDays`. */
-    id: z.string().min(1).optional(),
-    /**
-     * Last period covered by the run. Omitted for a single-period run
-     */
-    endId: z.string().min(1).optional(),
-    /**
-     * Without `id`: cover the `lastDays` days up to and including yesterday (UTC), worked
-     * out when the step runs, so a scheduled pipeline picks up recent and revised data.
-     */
-    lastDays: z.number().int().positive().optional(),
-  })
-  .refine((p) => p.id !== undefined || p.lastDays !== undefined, {
-    message: "Either id or lastDays must be set",
+  .union([fixedPeriodSchema, rollingPeriodSchema, lastDaysPeriodSchema])
+  .superRefine((period, ctx) => {
+    const count = "lastDays" in period ? period.lastDays : "count" in period ? period.count : null;
+    const max = MAX_ROLLING_COUNT[period.periodType];
+    if (count !== null && count > max) {
+      ctx.addIssue({
+        code: "custom",
+        message: `A rolling ${period.periodType} window covers at most ${max} periods`,
+        path: ["lastDays" in period ? "lastDays" : "count"],
+      });
+    }
   });
 
 export const climateOpenEoConfigSchema = z
@@ -60,8 +88,12 @@ export const climateOpenEoConfigSchema = z
 
 export type ClimateOpenEoConfig = z.infer<typeof climateOpenEoConfigSchema>;
 
+/**
+ * A run or schedule overrides either part on its own; what it leaves out comes from the step,
+ * including later edits, so a schedule without a period follows a rolling step as it moves.
+ */
 export const climateOpenEoContextSchema = z.object({
-  period: periodSchema,
+  period: periodSchema.optional(),
   orgUnit: z
     .object({
       levels: z.array(z.string()).optional(),
@@ -69,5 +101,6 @@ export const climateOpenEoContextSchema = z.object({
     })
     .refine((o) => (o.levels && o.levels.length > 0) || (o.ids && o.ids.length > 0), {
       message: "At least one of levels or ids must be non-empty",
-    }),
+    })
+    .optional(),
 });

@@ -16,13 +16,15 @@ const AGGREGATE_TO_DHIS2_ORG_UNITS = "aggregate_to_dhis2_json";
 export function buildOpenEoJobBody({
   config,
   geometries,
+  temporalExtent,
   title,
 }: {
   config: ClimateOpenEoConfig;
   geometries: OrgUnitFeatureCollection;
+  temporalExtent?: [string, string];
   title?: string;
 }): OpenEoJobCreateBody {
-  const temporal_extent = temporalExtentFromPeriod(config.period);
+  const temporal_extent = temporalExtent ?? temporalExtentFromPeriod(config.period);
 
   const process_graph =
     config.exportId !== undefined
