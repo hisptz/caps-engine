@@ -90,6 +90,17 @@ export const climateModule = new Elysia({ prefix: "/climate", tags: ["climate"] 
       },
     },
   })
+  .get("/ingestions/jobs", () => climateService.listActiveJobs(), {
+    detail: {
+      summary: "List active ingestion jobs",
+      description:
+        "List async ingestion and sync jobs submitted through CAPS that are still accepted, running or retrying. Statuses are refreshed from the climate-api on each call.",
+      operationId: "listActiveClimateIngestionJobs",
+      responses: {
+        "200": { description: "Active jobs, as `{ jobs: [...] }`" },
+      },
+    },
+  })
   .get(
     "/ingestions/:ingestionId",
     ({ params }) => climateService.getIngestion(params.ingestionId),

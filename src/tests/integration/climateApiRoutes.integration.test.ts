@@ -9,7 +9,21 @@ vi.mock("@/shared/clients/climateApi.ts", () => ({
   },
 }));
 
+vi.mock("@/services/api/utils/climate/jobRegistry.ts", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/services/api/utils/climate/jobRegistry.ts")>();
+  return {
+    ...actual,
+    climateJobRegistry: {
+      record: vi.fn(),
+      updateStatus: vi.fn(),
+      listActive: vi.fn(),
+    },
+  };
+});
+
 import { climateApiClient } from "@/shared/clients/climateApi.ts";
+import { climateJobRegistry } from "@/services/api/utils/climate/jobRegistry.ts";
 import { ClimateService } from "@/services/api/modules/climate/service.ts";
 import { ApiError } from "@/shared/api/errors.ts";
 
@@ -18,6 +32,9 @@ const climateService = new ClimateService();
 const mockGet = vi.mocked(climateApiClient.get);
 const mockPost = vi.mocked(climateApiClient.post);
 const mockDelete = vi.mocked(climateApiClient.delete);
+const mockRecord = vi.mocked(climateJobRegistry.record);
+const mockUpdateStatus = vi.mocked(climateJobRegistry.updateStatus);
+const mockListActive = vi.mocked(climateJobRegistry.listActive);
 
 function makeAxiosError(status?: number): AxiosError {
   const err = new axios.AxiosError("Request failed");
@@ -186,6 +203,7 @@ describe("ClimateService.listIngestions", () => {
 describe("ClimateService.createIngestion", () => {
   beforeEach(() => {
     mockPost.mockReset();
+    mockRecord.mockReset();
   });
 
   it("forwards Prefer header and normalizes async 202 response by default", async () => {
@@ -214,6 +232,7 @@ describe("ClimateService.createIngestion", () => {
     expect(mockPost).toHaveBeenCalledWith("/ingestions", body, {
       headers: { Prefer: "respond-async" },
     });
+    expect(mockRecord).toHaveBeenCalledWith("job-abc", "ingestion", "chirps3_precipitation_daily");
   });
 
   it("omits Prefer header when async=false", async () => {
@@ -237,6 +256,7 @@ describe("ClimateService.createIngestion", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(upstream);
     expect(mockPost).toHaveBeenCalledWith("/ingestions", body, { headers: {} });
+    expect(mockRecord).not.toHaveBeenCalled();
   });
 
   it("forwards an ingestion body without start for forecast templates", async () => {
@@ -302,6 +322,7 @@ describe("ClimateService.getIngestionJob", () => {
 describe("ClimateService.cancelIngestionJob", () => {
   beforeEach(() => {
     mockDelete.mockReset();
+    mockUpdateStatus.mockReset();
   });
 
   it("returns upstream status and body on success", async () => {
@@ -319,12 +340,64 @@ describe("ClimateService.cancelIngestionJob", () => {
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual(jobRecord);
     expect(mockDelete).toHaveBeenCalledWith("/ingestions/jobs/job-abc");
+    expect(mockUpdateStatus).toHaveBeenCalledWith("job-abc", "cancelled");
+  });
+});
+
+describe("ClimateService.listActiveJobs", () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+    mockListActive.mockReset();
+    mockUpdateStatus.mockReset();
+  });
+
+  const createdAt = new Date("2026-10-13T08:00:00Z");
+  const tracked = (jobId: string, status = "running") => ({
+    jobId,
+    kind: "ingestion",
+    datasetId: `ds-${jobId}`,
+    status,
+    createdAt,
+  });
+
+  it("refreshes each tracked job and returns only those still active", async () => {
+    mockListActive.mockResolvedValueOnce([tracked("job-1"), tracked("job-2", "accepted")]);
+    mockGet.mockImplementation(async (url: string) => ({
+      data: { status: url.endsWith("job-1") ? "running" : "successful" },
+    }));
+
+    const result = await climateService.listActiveJobs();
+
+    expect(result.jobs).toEqual([tracked("job-1")]);
+    expect(mockUpdateStatus).toHaveBeenCalledWith("job-1", "running");
+    expect(mockUpdateStatus).toHaveBeenCalledWith("job-2", "successful");
+  });
+
+  it("drops jobs the climate-api no longer knows", async () => {
+    mockListActive.mockResolvedValueOnce([tracked("job-gone")]);
+    mockGet.mockRejectedValueOnce(makeAxiosError(404));
+
+    const result = await climateService.listActiveJobs();
+
+    expect(result.jobs).toEqual([]);
+    expect(mockUpdateStatus).toHaveBeenCalledWith("job-gone", "not_found");
+  });
+
+  it("keeps the last known status when the climate-api is unreachable", async () => {
+    mockListActive.mockResolvedValueOnce([tracked("job-1")]);
+    mockGet.mockRejectedValueOnce(makeAxiosError());
+
+    const result = await climateService.listActiveJobs();
+
+    expect(result.jobs).toEqual([tracked("job-1")]);
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
   });
 });
 
 describe("ClimateService.syncDataset", () => {
   beforeEach(() => {
     mockPost.mockReset();
+    mockRecord.mockReset();
   });
 
   it("forwards Prefer header and normalizes async 202 response by default", async () => {
@@ -351,6 +424,11 @@ describe("ClimateService.syncDataset", () => {
     expect(mockPost).toHaveBeenCalledWith("/sync/chirps3_precipitation_daily_sle", body, {
       headers: { Prefer: "respond-async" },
     });
+    expect(mockRecord).toHaveBeenCalledWith(
+      "sync-job-1",
+      "sync",
+      "chirps3_precipitation_daily_sle"
+    );
   });
 });
 

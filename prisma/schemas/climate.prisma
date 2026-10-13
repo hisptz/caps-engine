@@ -1,0 +1,27 @@
+// ============================================================
+// CLIMATE CLUSTER
+// Async ingestion/sync jobs CAPS has submitted to the climate-api.
+// The climate-api cannot list jobs, so CAPS keeps its own record
+// to let clients rediscover jobs that are still running.
+// ============================================================
+
+model ClimateJob {
+  // Job id assigned by the climate-api (from the 202 Location header)
+  jobId String @id
+
+  // "ingestion" or "sync"
+  kind String
+
+  // Data source id (ingestion) or managed dataset id (sync)
+  datasetId String?
+
+  // Last status seen from the climate-api (accepted, running, retrying, successful, failed, ...)
+  status String @default("accepted")
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  finishedAt DateTime?
+
+  @@index([status])
+  @@map("climate_jobs")
+}
