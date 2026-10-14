@@ -22,28 +22,6 @@
               },
               "application/json": {
                 "schema": {
-                  "$defs": {
-                    "Link": {
-                      "properties": {
-                        "href": {
-                          "type": "string",
-                          "title": "Href"
-                        },
-                        "rel": {
-                          "type": "string",
-                          "title": "Rel"
-                        },
-                        "title": {
-                          "type": "string",
-                          "title": "Title"
-                        }
-                      },
-                      "type": "object",
-                      "required": ["href", "rel", "title"],
-                      "title": "Link",
-                      "description": "Hypermedia link."
-                    }
-                  },
                   "properties": {
                     "message": {
                       "type": "string",
@@ -51,28 +29,7 @@
                     },
                     "links": {
                       "items": {
-                        "schema": {
-                          "Link": {
-                            "properties": {
-                              "href": {
-                                "type": "string",
-                                "title": "Href"
-                              },
-                              "rel": {
-                                "type": "string",
-                                "title": "Rel"
-                              },
-                              "title": {
-                                "type": "string",
-                                "title": "Title"
-                              }
-                            },
-                            "type": "object",
-                            "required": ["href", "rel", "title"],
-                            "title": "Link",
-                            "description": "Hypermedia link."
-                          }
-                        }
+                        "$ref": "#/components/schemas/Link"
                       },
                       "type": "array",
                       "title": "Links"
@@ -133,7 +90,7 @@
       "get": {
         "tags": ["openEO", "openEO"],
         "summary": "Well Known Openeo",
-        "description": "OpenEO service discovery — lets clients find the versioned API URL.",
+        "description": "OpenEO service discovery \u2014 lets clients find the versioned API URL.",
         "operationId": "well_known_openeo__well_known_openeo_get",
         "responses": {
           "200": {
@@ -1011,12 +968,177 @@
         }
       }
     },
-    "/dataset-templates/": {
+    "/features": {
       "get": {
-        "tags": ["Dataset templates"],
-        "summary": "List Dataset Templates",
-        "description": "Return the available dataset templates from the registry.",
-        "operationId": "list_dataset_templates_dataset_templates__get",
+        "tags": ["Features"],
+        "summary": "List Feature Collections",
+        "description": "List the feature collections this instance holds.\n\nRegistered collections only. A GeoParquet file placed in the store directory by hand does\nnot appear: a record is what brings a collection into existence, so the store directory is\nnot an inbox.",
+        "operationId": "list_feature_collections_features_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureCollectionListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/features/{collection_id}": {
+      "get": {
+        "tags": ["Features"],
+        "summary": "Get Feature Collection",
+        "description": "Return one registered feature collection.",
+        "operationId": "get_feature_collection_features__collection_id__get",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureCollectionRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/features/{collection_id}/refresh": {
+      "post": {
+        "tags": ["Features"],
+        "summary": "Refresh Feature Collection",
+        "description": "Fetch a feature collection from its template's provider, creating or replacing it.\n\nPass ``Prefer: respond-async`` to queue it as a background job and get 202 with\n``Location: /ingestions/jobs/{id}``, as for ``POST /ingestions``. Refused with 404 for an\nunknown template and 400 for one naming no provider this instance has, before anything is\nqueued; refused on a read-only instance like every other write.",
+        "operationId": "refresh_feature_collection_features__collection_id__refresh_post",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          },
+          {
+            "name": "publish",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Publish"
+            }
+          },
+          {
+            "name": "prefer",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prefer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureCollectionRecord"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued; follow the Location header to the job."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/features/{collection_id}/data.parquet": {
+      "get": {
+        "tags": ["Features"],
+        "summary": "Download Feature Collection",
+        "description": "Serve the GeoParquet a published collection is stored as.\n\nThe href its STAC collection advertises as the `data` asset, so a client that reads the\ncatalogue can fetch the bytes it describes. The whole file: windowed reads are the reader's\njob inside a workflow, and a query surface over collections is not this ticket's.\n\nThe path comes from the registered record \u2014 see `published_collection_file_or_404`.",
+        "operationId": "download_feature_collection_features__collection_id__data_parquet_get",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/data-sources": {
+      "get": {
+        "tags": ["Data sources"],
+        "summary": "List Data Sources",
+        "description": "Return the available data sources from the registry.\n\nJSON by default. A browser gets the page the rail links to: only a client ranking\n`text/html` above JSON, with `?f=html` and `?f=json` deciding outright.\n\nThe page is a narrower view than the JSON: it lists what this instance can *fetch*, while\nthe JSON lists every data source and flags `ingestable`. A data source produced by a\nworkflow is shown under Workflows instead, where the thing that makes it can be seen beside it.\n\nRaster data sources come first, then feature collection data sources, each marked with\n`itemType` (`coverage` or `feature`), as datasets are on `GET /datasets`.",
+        "operationId": "list_data_sources_data_sources_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1028,7 +1150,12 @@
                     "type": "object"
                   },
                   "type": "array",
-                  "title": "Response List Dataset Templates Dataset Templates  Get"
+                  "title": "Response List Data Sources Data Sources Get"
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -1036,12 +1163,12 @@
         }
       }
     },
-    "/dataset-templates/{dataset_id}": {
+    "/data-sources/{dataset_id}": {
       "get": {
-        "tags": ["Dataset templates"],
-        "summary": "Get Dataset Template",
-        "description": "Get a single dataset template by ID with derived coverage metadata.",
-        "operationId": "get_dataset_template_dataset_templates__dataset_id__get",
+        "tags": ["Data sources"],
+        "summary": "Get Data Source",
+        "description": "Get a single data source by ID with derived coverage metadata.\n\nJSON by default. A browser gets the page, where the data source can also be ingested;\n`?f=html` and `?f=json` choose explicitly.",
+        "operationId": "get_data_source_data_sources__dataset_id__get",
         "parameters": [
           {
             "name": "dataset_id",
@@ -1061,7 +1188,12 @@
                 "schema": {
                   "type": "object",
                   "additionalProperties": true,
-                  "title": "Response Get Dataset Template Dataset Templates  Dataset Id  Get"
+                  "title": "Response Get Data Source Data Sources  Dataset Id  Get"
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -1083,7 +1215,7 @@
       "get": {
         "tags": ["Datasets"],
         "summary": "List Datasets",
-        "description": "List managed datasets.",
+        "description": "List managed datasets.\n\nJSON by default, as it has always been. A browser gets the page the rail links to, on the\nsame terms as a single dataset: only a client ranking `text/html` above JSON, with `?f=html`\nand `?f=json` deciding outright.",
         "operationId": "list_datasets_datasets_get",
         "responses": {
           "200": {
@@ -1092,6 +1224,11 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DatasetListResponse"
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -1103,7 +1240,7 @@
       "get": {
         "tags": ["Datasets"],
         "summary": "Get Dataset",
-        "description": "Get managed dataset metadata and available versions.",
+        "description": "Get managed dataset metadata and available versions.\n\nJSON by default. A browser, which ranks `text/html` first, gets the dataset page the landing\npage links to; `?f=html` and `?f=json` choose explicitly.",
         "operationId": "get_dataset_datasets__dataset_id__get",
         "parameters": [
           {
@@ -1124,8 +1261,47 @@
                 "schema": {
                   "$ref": "#/components/schemas/DatasetDetailRecord"
                 }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/datasets/{dataset_id}/thumbnail.png": {
+      "get": {
+        "tags": ["Datasets"],
+        "summary": "Get Dataset Thumbnail",
+        "description": "Serve a dataset's thumbnail, the image its STAC collection points at.\n\n404 only when no thumbnail has ever been produced: a dataset not yet ingested, or a first\nrender that failed or found nothing to draw. It is a \"no preview\" answer rather than a\nserver fault. A later run that fails to render, or whose chosen slice is entirely missing,\nleaves the previous image in place, so a 200 here can be a run or more stale \u2014 see\n`write_dataset_thumbnail`. The STAC collection only advertises the asset when the file is\nthere, so a client following a published href does not meet the 404.",
+        "operationId": "get_dataset_thumbnail_datasets__dataset_id__thumbnail_png_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -1144,7 +1320,7 @@
       "get": {
         "tags": ["Datasets"],
         "summary": "Download Artifact File",
-        "description": "Download the primary saved file for a dataset when available.",
+        "description": "Download the primary saved file for a dataset, for the one format that is a single file.\n\nAn allowlist rather than a denylist. This used to refuse `zarr` and serve everything else\nas `application/x-netcdf` under a `.nc` filename, which was true while NetCDF was the only\nsingle-file format left. `GEOPARQUET` broke that assumption: a feature collection is one\nfile with a path, so it passed the check and came back as Parquet bytes wearing NetCDF's\nmedia type and extension \u2014 a wrong answer rather than a refusal.\n\nNaming the format the response is built for means the next format added is refused here by\ndefault and has to claim its own branch, which is the failure a caller can act on. Serving\na feature collection is `GET /features` in CLIM-1068, with the Parquet media type settled\nin CLIM-1069.",
         "operationId": "download_artifact_file_datasets__dataset_id__download_get",
         "parameters": [
           {
@@ -1263,7 +1439,7 @@
       "post": {
         "tags": ["Ingestions"],
         "summary": "Create Ingestion",
-        "description": "Create or update a managed dataset from a dataset template and configured extent.\n\nPass ``Prefer: respond-async`` to queue the ingestion as a background job and\nreturn immediately with 202 + ``Location: /ingestions/jobs/{id}``.",
+        "description": "Create or update a managed dataset from a data source and the configured extent.\n\nPass ``Prefer: respond-async`` to queue the ingestion as a background job and\nreturn immediately with 202 + ``Location: /ingestions/jobs/{id}``.",
         "operationId": "create_ingestion_ingestions_post",
         "parameters": [
           {
@@ -1377,11 +1553,11 @@
       }
     },
     "/zarr/{dataset_id}/{relative_path}": {
-      "get": {
+      "head": {
         "tags": ["Zarr"],
         "summary": "Get Canonical Zarr Store File",
         "description": "Serve canonical Zarr store content for a managed dataset.",
-        "operationId": "get_canonical_zarr_store_file_zarr__dataset_id___relative_path__get",
+        "operationId": "get_canonical_zarr_store_file_zarr__dataset_id___relative_path__head",
         "parameters": [
           {
             "name": "dataset_id",
@@ -1423,11 +1599,11 @@
           }
         }
       },
-      "head": {
+      "get": {
         "tags": ["Zarr"],
         "summary": "Get Canonical Zarr Store File",
         "description": "Serve canonical Zarr store content for a managed dataset.",
-        "operationId": "get_canonical_zarr_store_file_zarr__dataset_id___relative_path__get",
+        "operationId": "get_canonical_zarr_store_file_zarr__dataset_id___relative_path__head",
         "parameters": [
           {
             "name": "dataset_id",
@@ -1471,11 +1647,11 @@
       }
     },
     "/icechunk/{dataset_id}/{file_path}": {
-      "get": {
+      "head": {
         "tags": ["Icechunk"],
         "summary": "Serve Icechunk Store File",
         "description": "Serve a raw Icechunk store file for native SDK access.\n\nEnables clients to open the store directly with::\n\n    import icechunk, zarr\n\n    repo = icechunk.Repository.open(icechunk.http_storage(\"http://<host>/icechunk/<dataset_id>/\"))\n    ds = zarr.open(repo.readonly_session(\"main\").store, zarr_format=3)",
-        "operationId": "serve_icechunk_store_file_icechunk__dataset_id___file_path__get",
+        "operationId": "serve_icechunk_store_file_icechunk__dataset_id___file_path__head",
         "parameters": [
           {
             "name": "dataset_id",
@@ -1517,11 +1693,11 @@
           }
         }
       },
-      "head": {
+      "get": {
         "tags": ["Icechunk"],
         "summary": "Serve Icechunk Store File",
         "description": "Serve a raw Icechunk store file for native SDK access.\n\nEnables clients to open the store directly with::\n\n    import icechunk, zarr\n\n    repo = icechunk.Repository.open(icechunk.http_storage(\"http://<host>/icechunk/<dataset_id>/\"))\n    ds = zarr.open(repo.readonly_session(\"main\").store, zarr_format=3)",
-        "operationId": "serve_icechunk_store_file_icechunk__dataset_id___file_path__get",
+        "operationId": "serve_icechunk_store_file_icechunk__dataset_id___file_path__head",
         "parameters": [
           {
             "name": "dataset_id",
@@ -1712,7 +1888,7 @@
       "get": {
         "tags": ["openEO", "openEO"],
         "summary": "List Processes",
-        "description": "Return all available openEO processes.",
+        "description": "Return all available openEO processes.\n\nThe openEO JSON by default, as clients expect. A browser gets the catalogue page the rail\nlinks to, on the same terms as a single process.",
         "operationId": "list_processes_processes_get",
         "responses": {
           "200": {
@@ -1724,6 +1900,11 @@
                   "type": "object",
                   "title": "Response List Processes Processes Get"
                 }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
               }
             }
           }
@@ -1734,7 +1915,7 @@
       "get": {
         "tags": ["openEO", "openEO"],
         "summary": "Get Process Spec",
-        "description": "Return one openEO process description by id.",
+        "description": "Return one openEO process description by id.\n\nJSON by default, as openEO clients expect. A browser, which ranks `text/html` first, gets\nthe process page; `?f=html` and `?f=json` choose explicitly.",
         "operationId": "get_process_spec_processes__process_id__get",
         "parameters": [
           {
@@ -1756,6 +1937,130 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Get Process Spec Processes  Process Id  Get"
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/exports/{export_id}": {
+      "post": {
+        "tags": ["Exports", "Exports"],
+        "summary": "Deliver Export",
+        "description": "Queue delivery of a completed source job's saved export payload.\n\nReusing an idempotency key with identical content returns the existing\ndelivery; different content is a conflict.",
+        "operationId": "deliver_export_exports__export_id__post",
+        "parameters": [
+          {
+            "name": "export_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Export Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliveryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/exports/{export_id}/jobs/{delivery_job_id}": {
+      "get": {
+        "tags": ["Exports", "Exports"],
+        "summary": "Get Delivery Job",
+        "description": "Return one delivery job's status and, when finished, its export report.",
+        "operationId": "get_delivery_job_exports__export_id__jobs__delivery_job_id__get",
+        "parameters": [
+          {
+            "name": "export_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Export Id"
+            }
+          },
+          {
+            "name": "delivery_job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Delivery Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Delivery Job Exports  Export Id  Jobs  Delivery Job Id  Get"
                 }
               }
             }
@@ -1830,7 +2135,7 @@
       },
       "ArtifactFormat": {
         "type": "string",
-        "enum": ["zarr", "netcdf", "icechunk"],
+        "enum": ["zarr", "netcdf", "icechunk", "geoparquet"],
         "title": "ArtifactFormat",
         "description": "Supported stored artifact formats."
       },
@@ -1892,6 +2197,28 @@
         "type": "object",
         "title": "ArtifactRequestScope",
         "description": "Original request parameters used to create an artifact."
+      },
+      "ArtifactVersion": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Value",
+            "description": "The release identifier itself, verbatim as the authority publishes it (for example 'R2025A' or '2026-08-19.0'). Opaque to OCS: not parsed, ordered, or normalized, because its syntax belongs to the authority. Surrounding whitespace is rejected rather than trimmed, so 'verbatim' stays true and a padded declaration cannot compare unequal to the same release declared cleanly."
+          },
+          "authority": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*$",
+            "title": "Authority",
+            "description": "Whose versioning scheme gives `value` its meaning, as a stable machine identifier ('worldpop', 'overture', 'ocs') \u2014 never a display label. Compared exactly, and part of the identity, so changing it renames every release under it; choose it once."
+          }
+        },
+        "type": "object",
+        "required": ["value", "authority"],
+        "title": "ArtifactVersion",
+        "description": "A logical release identity: what the release is, and whose scheme names it.\n\nThe meaningful identity is the pair. A bare \"1.0\" or \"R2025A\" says nothing on its own \u2014\nit is `worldpop:R2025A` or `ocs:1.0` that identifies a release \u2014 so one namespaced\nconcept is carried here rather than parallel `source_version` / `dataset_version` /\n`release_version` fields that would each mean something slightly different.\n\nDistinct from the other two identities on a record. `artifact_id` answers \"which exact\nmaterialization is this?\" and every artifact has one; this answers \"which logical\nrelease is this?\" and only a versioned dataset has one. How an artifact was produced is\nprovenance, and a derived artifact does not inherit a version from its inputs \u2014 an\nopenEO result carries `version=None` unless OCS deliberately releases it, with its\ninputs recorded as provenance rather than folded into this field."
       },
       "CheckOutcome": {
         "type": "string",
@@ -1963,7 +2290,7 @@
           "dataset_id": {
             "type": "string",
             "title": "Dataset Id",
-            "description": "Source dataset template id from the Open Climate Service registry."
+            "description": "Id of the data source to ingest from, as listed at GET /data-sources."
           },
           "start": {
             "anyOf": [
@@ -1975,7 +2302,7 @@
               }
             ],
             "title": "Start",
-            "description": "Start period to ingest. Required for historical datasets. May be omitted for a dataset declaring 'temporal_direction: future' (e.g. a forecast), where it means 'from now' — a fixed date would be stale by the next day."
+            "description": "Start period to ingest. Required for historical datasets. May be omitted for a dataset declaring 'temporal_direction: future' (e.g. a forecast), where it means 'from now' \u2014 a fixed date would be stale by the next day."
           },
           "end": {
             "anyOf": [
@@ -2040,7 +2367,7 @@
           "source_dataset_id": {
             "type": "string",
             "title": "Source Dataset Id",
-            "description": "Dataset template id from which this managed dataset was created."
+            "description": "Id of the data source this managed dataset was created from."
           },
           "dataset_name": {
             "type": "string",
@@ -2059,15 +2386,45 @@
             "title": "Short Name",
             "description": "Short display name of the dataset."
           },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Longer prose description from the dataset template, where the caveats about what the values mean belong."
+          },
+          "itemType": {
+            "$ref": "#/components/schemas/DatasetItemType",
+            "description": "What this dataset holds: 'feature' for a feature collection, 'coverage' for a raster. The one field that lets a client filter a listing without a request per row \u2014 `format` sits on the nested version record, which only the detail endpoint returns. Spelled in OGC API - Features' camelCase because the name is borrowed from that specification rather than invented here."
+          },
           "variable": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Variable",
-            "description": "Primary raster variable stored in the dataset."
+            "description": "Primary raster variable stored in the dataset. None for a feature collection, which has properties rather than a measured variable."
           },
           "period_type": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Period Type",
-            "description": "Temporal period type of the dataset, for example daily or yearly."
+            "description": "Temporal period type of the dataset, for example daily or yearly. None for a dataset with no temporal axis, such as a boundary set."
           },
           "units": {
             "anyOf": [
@@ -2117,6 +2474,24 @@
             "title": "Source Url",
             "description": "Upstream source documentation URL."
           },
+          "license": {
+            "type": "string",
+            "title": "License",
+            "description": "SPDX identifier for the dataset's licence, or 'other' when the licence has no SPDX identifier. Never absent: an undeclared licence reports 'other' rather than something that reads as permissive.",
+            "default": "other"
+          },
+          "license_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License Url",
+            "description": "URL of the licence text, when known."
+          },
           "extent": {
             "$ref": "#/components/schemas/ArtifactCoverage",
             "description": "Current covered spatial and temporal extent of the dataset."
@@ -2153,8 +2528,7 @@
           "dataset_id",
           "source_dataset_id",
           "dataset_name",
-          "variable",
-          "period_type",
+          "itemType",
           "extent",
           "last_updated",
           "publication",
@@ -2162,6 +2536,12 @@
         ],
         "title": "DatasetDetailRecord",
         "description": "Detailed native FastAPI view of a managed dataset."
+      },
+      "DatasetItemType": {
+        "type": "string",
+        "enum": ["feature", "coverage"],
+        "title": "DatasetItemType",
+        "description": "What a managed dataset holds, as the public `itemType` discriminator.\n\nThe field name and the `feature` value are OGC API - Features Part 1, which defines\n`itemType` on the collection object as an \"indicator about the type of the items in the\ncollection (the default value is 'feature')\". `coverage` is convention rather than\nconformance: OGC API - Coverages is a candidate draft and silent on the field. `/datasets`\nis OCS's own API, so borrowing the name buys consistency, not a promise that the rest of\nan OGC collection object is there."
       },
       "DatasetListResponse": {
         "properties": {
@@ -2188,7 +2568,7 @@
                     "spatial": {
                       "xmax": -10.1,
                       "xmin": -13.5,
-                      "ymax": 10,
+                      "ymax": 10.0,
                       "ymin": 6.9
                     },
                     "temporal": {
@@ -2196,6 +2576,7 @@
                       "start": "2024-01-01"
                     }
                   },
+                  "itemType": "coverage",
                   "last_updated": "2026-03-27T08:40:24.344473Z",
                   "links": [
                     {
@@ -2265,7 +2646,7 @@
           "source_dataset_id": {
             "type": "string",
             "title": "Source Dataset Id",
-            "description": "Dataset template id from which this managed dataset was created."
+            "description": "Id of the data source this managed dataset was created from."
           },
           "dataset_name": {
             "type": "string",
@@ -2284,15 +2665,45 @@
             "title": "Short Name",
             "description": "Short display name of the dataset."
           },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Longer prose description from the dataset template, where the caveats about what the values mean belong."
+          },
+          "itemType": {
+            "$ref": "#/components/schemas/DatasetItemType",
+            "description": "What this dataset holds: 'feature' for a feature collection, 'coverage' for a raster. The one field that lets a client filter a listing without a request per row \u2014 `format` sits on the nested version record, which only the detail endpoint returns. Spelled in OGC API - Features' camelCase because the name is borrowed from that specification rather than invented here."
+          },
           "variable": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Variable",
-            "description": "Primary raster variable stored in the dataset."
+            "description": "Primary raster variable stored in the dataset. None for a feature collection, which has properties rather than a measured variable."
           },
           "period_type": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Period Type",
-            "description": "Temporal period type of the dataset, for example daily or yearly."
+            "description": "Temporal period type of the dataset, for example daily or yearly. None for a dataset with no temporal axis, such as a boundary set."
           },
           "units": {
             "anyOf": [
@@ -2342,6 +2753,24 @@
             "title": "Source Url",
             "description": "Upstream source documentation URL."
           },
+          "license": {
+            "type": "string",
+            "title": "License",
+            "description": "SPDX identifier for the dataset's licence, or 'other' when the licence has no SPDX identifier. Never absent: an undeclared licence reports 'other' rather than something that reads as permissive.",
+            "default": "other"
+          },
+          "license_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License Url",
+            "description": "URL of the licence text, when known."
+          },
           "extent": {
             "$ref": "#/components/schemas/ArtifactCoverage",
             "description": "Current covered spatial and temporal extent of the dataset."
@@ -2370,8 +2799,7 @@
           "dataset_id",
           "source_dataset_id",
           "dataset_name",
-          "variable",
-          "period_type",
+          "itemType",
           "extent",
           "last_updated",
           "publication"
@@ -2411,6 +2839,63 @@
         "required": ["created_at", "format", "coverage"],
         "title": "DatasetVersionRecord",
         "description": "Version summary as exposed from a dataset detail view."
+      },
+      "DeliveryAccepted": {
+        "properties": {
+          "delivery_job_id": {
+            "type": "string",
+            "title": "Delivery Job Id"
+          },
+          "export_id": {
+            "type": "string",
+            "title": "Export Id"
+          },
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run"
+          },
+          "reused": {
+            "type": "boolean",
+            "title": "Reused"
+          },
+          "status_url": {
+            "type": "string",
+            "title": "Status Url"
+          },
+          "report_url": {
+            "type": "string",
+            "title": "Report Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "delivery_job_id",
+          "export_id",
+          "dry_run",
+          "reused",
+          "status_url",
+          "report_url"
+        ],
+        "title": "DeliveryAccepted",
+        "description": "Accepted delivery job plus links to its status and report."
+      },
+      "DeliveryRequest": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["job_id"],
+        "title": "DeliveryRequest",
+        "description": "Request body for POST /exports/{export_id}."
       },
       "ExtentRecord": {
         "properties": {
@@ -2464,6 +2949,146 @@
         "required": ["bbox"],
         "title": "ExtentRecord",
         "description": "Configured spatial extent for this Open Climate Service instance."
+      },
+      "FeatureCollectionListResponse": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "Self-describing envelope type for this collection response.",
+            "default": "FeatureCollectionList",
+            "examples": ["FeatureCollectionList"]
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureCollectionRecord"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "Feature collections registered in this Open Climate Service instance. A GeoParquet file in the store directory that nothing registered is not one of these: the listing reads records, never the filesystem."
+          }
+        },
+        "type": "object",
+        "title": "FeatureCollectionListResponse",
+        "description": "Envelope response for registered feature collections."
+      },
+      "FeatureCollectionRecord": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Stable identifier of the collection, and the name it is loaded by."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Display name of the collection."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Prose from the collection's template, where caveats about what the features mean belong."
+          },
+          "license": {
+            "type": "string",
+            "title": "License",
+            "description": "SPDX identifier for the collection's licence, or 'other' when it has none. Never absent: an undeclared licence reports 'other' rather than something that reads as permissive.",
+            "default": "other"
+          },
+          "license_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License Url",
+            "description": "URL of the licence text, when known."
+          },
+          "attribution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribution",
+            "description": "Required attribution for the collection. Not decoration: Overture divisions carry an obligation from the OpenStreetMap data they incorporate."
+          },
+          "id_property": {
+            "type": "string",
+            "title": "Id Property",
+            "description": "Property each feature is identified by. The value that becomes the location column of a DHIS2 or CHAP export, which is why it can never be absent."
+          },
+          "feature_count": {
+            "type": "integer",
+            "title": "Feature Count",
+            "description": "Number of features stored in the collection."
+          },
+          "geometry_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Geometry Types",
+            "description": "Geometry types the stored file declares, for example ['Polygon']. Empty when the file declares none, which is 'not stated' rather than 'no geometry'."
+          },
+          "primary_geometry": {
+            "type": "string",
+            "title": "Primary Geometry",
+            "description": "Name of the geometry column in the stored file."
+          },
+          "crs": {
+            "type": "string",
+            "title": "Crs",
+            "description": "Coordinate reference system the geometry is stored in."
+          },
+          "version": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtifactVersion"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Release identity of the stored collection, when its source publishes one."
+          },
+          "extent": {
+            "$ref": "#/components/schemas/ArtifactCoverage",
+            "description": "Spatial extent of the stored collection."
+          },
+          "last_updated": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Updated",
+            "description": "When this collection was last written."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "id_property",
+          "feature_count",
+          "primary_geometry",
+          "crs",
+          "extent",
+          "last_updated"
+        ],
+        "title": "FeatureCollectionRecord",
+        "description": "One registered feature collection, as `GET /features` reports it.\n\nTwo kinds of fact meet here. Record-derived ones \u2014 count, geometry types, CRS, coverage,\nversion \u2014 describe what was actually stored, and are answerable for every collection.\nTemplate-derived ones \u2014 licence, attribution, description \u2014 describe what the collection\n*is*, and are only as good as the template that declared it."
       },
       "HTTPValidationError": {
         "properties": {
@@ -2811,26 +3436,6 @@
         "enum": ["process"],
         "title": "JobType",
         "description": "Native job categories."
-      },
-      "Link": {
-        "properties": {
-          "href": {
-            "type": "string",
-            "title": "Href"
-          },
-          "rel": {
-            "type": "string",
-            "title": "Rel"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          }
-        },
-        "type": "object",
-        "required": ["href", "rel", "title"],
-        "title": "Link",
-        "description": "Hypermedia link."
       },
       "OpenEOJobCreate": {
         "properties": {
@@ -3389,11 +3994,11 @@
           "source_dataset_id": {
             "type": "string",
             "title": "Source Dataset Id",
-            "description": "Source dataset template id used to plan the sync."
+            "description": "Id of the data source used to plan the sync."
           },
           "sync_kind": {
             "$ref": "#/components/schemas/SyncKind",
-            "description": "Sync planning mode declared by the dataset template."
+            "description": "Sync planning mode the data source declares."
           },
           "action": {
             "$ref": "#/components/schemas/SyncAction",
@@ -3449,6 +4054,28 @@
             "type": "string",
             "title": "Target End Source",
             "description": "Where target_end came from, for example request, default_today, request_clamped_by_availability, default_today_clamped_by_availability, or current_coverage."
+          },
+          "current_version": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtifactVersion"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Release identity of the currently materialized artifact, read from ArtifactRecord.version. Populated only for sync_kind=release when the artifact carries one; current_end remains the period-domain value used for availability queries even when this is set."
+          },
+          "target_version": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtifactVersion"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Release identity the template declares as current, for sync_kind=release."
           },
           "delta_start": {
             "anyOf": [
@@ -3677,6 +4304,26 @@
         "required": ["id"],
         "title": "WorkflowRecord",
         "description": "Persisted workflow (user-defined process)."
+      },
+      "Link": {
+        "properties": {
+          "href": {
+            "type": "string",
+            "title": "Href"
+          },
+          "rel": {
+            "type": "string",
+            "title": "Rel"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": ["href", "rel", "title"],
+        "title": "Link",
+        "description": "Hypermedia link."
       }
     }
   }

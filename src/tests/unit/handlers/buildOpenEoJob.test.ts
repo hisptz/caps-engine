@@ -4,7 +4,7 @@ import type { ClimateOpenEoConfig } from "@/services/worker/services/handlers/cl
 
 const config: ClimateOpenEoConfig = {
   datasetId: "era5land_precipitation_monthly",
-  variable: { dataElement: "AbCdEfGhIjK" },
+  exportId: "rainfall-monthly",
   aggregation: { method: "sum" },
   period: { periodType: "monthly", id: "202601" },
   orgUnit: { ids: ["OU_ALPHA"] },
@@ -43,7 +43,6 @@ describe("buildOpenEoJobBody", () => {
     };
     expect(graph.arguments).toMatchObject({
       temporal_extent: ["2024-05-01", "2026-07-31"],
-      period_type: "month",
     });
   });
 
@@ -61,10 +60,43 @@ describe("buildOpenEoJobBody", () => {
     expect(graph.arguments).toMatchObject({
       dataset_id: "era5land_precipitation_monthly",
       temporal_extent: ["2026-01-01", "2026-01-31"],
-      data_element_id: "AbCdEfGhIjK",
+      export: "rainfall-monthly",
       method: "sum",
-      period_type: "month",
       geometries,
+    });
+  });
+
+  it("spells out the graph with ad-hoc DHIS2JSON options for a data element", () => {
+    const body = buildOpenEoJobBody({
+      config: { ...config, exportId: undefined, variable: { dataElement: "QRvJclmKq2g" } },
+      geometries,
+    });
+
+    const graph = body.process.process_graph;
+    expect(graph.agg).toBeUndefined();
+    expect(graph.load).toEqual({
+      process_id: "load_collection",
+      arguments: {
+        id: "era5land_precipitation_monthly",
+        temporal_extent: ["2026-01-01", "2026-01-31"],
+      },
+    });
+    expect(graph.zonal).toEqual({
+      process_id: "aggregate_spatial_weighted",
+      arguments: { data: { from_node: "load" }, geometries, reducer: "sum" },
+    });
+    expect(graph.save).toEqual({
+      process_id: "save_result",
+      arguments: {
+        data: { from_node: "zonal" },
+        format: "DHIS2JSON",
+        options: {
+          data_element_id: "QRvJclmKq2g",
+          org_unit_field: "feature_id",
+          period_type: "month",
+        },
+      },
+      result: true,
     });
   });
 });

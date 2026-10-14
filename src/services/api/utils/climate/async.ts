@@ -14,6 +14,23 @@ export function extractJobIdFromLocation(location: string | undefined): string |
   return match?.[1] ?? null;
 }
 
+/** Job id of a 202 Accepted climate-api response, read from its Location header. */
+export function extractAcceptedJobId(
+  status: number,
+  headers: Record<string, unknown>
+): string | null {
+  if (status !== 202) {
+    return null;
+  }
+  const location =
+    typeof headers.location === "string"
+      ? headers.location
+      : typeof headers.Location === "string"
+        ? headers.Location
+        : undefined;
+  return extractJobIdFromLocation(location);
+}
+
 export function buildAsyncPreferHeaders(useAsync: boolean): Record<string, string> {
   if (!useAsync) {
     return {};
@@ -32,13 +49,7 @@ export function normalizeAsyncPostResponse(
   }
 
   if (status === 202) {
-    const location =
-      typeof headers.location === "string"
-        ? headers.location
-        : typeof headers.Location === "string"
-          ? headers.Location
-          : undefined;
-    const jobId = extractJobIdFromLocation(location);
+    const jobId = extractAcceptedJobId(status, headers);
     if (jobId) {
       const body: AsyncJobAcceptedResponse = {
         jobId,

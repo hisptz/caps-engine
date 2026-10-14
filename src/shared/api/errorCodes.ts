@@ -23,7 +23,7 @@ export const ApiErrorCode = {
   CLIMATE_API_UNAVAILABLE: "climate_api_unavailable",
   CLIMATE_RESOURCE_NOT_FOUND: "climate_resource_not_found",
   CLIMATE_VALIDATION_ERROR: "climate_validation_error",
-  DATASET_NOT_FOUND: "dataset_not_found",
+  COLLECTION_NOT_FOUND: "collection_not_found",
 
   CHAP_UNAVAILABLE: "chap_unavailable",
 

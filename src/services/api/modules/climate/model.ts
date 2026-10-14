@@ -6,8 +6,8 @@ import {
 import { createIngestionSchema } from "@/services/api/utils/climate/schemas/createIngestion.schema.ts";
 import { syncDatasetSchema } from "@/services/api/utils/climate/schemas/syncDataset.schema.ts";
 
-export const datasetIdParams = z.object({ id: z.string().min(1) });
-export const datasetTemplateIdParams = z.object({ id: z.string().min(1) });
+export const collectionIdParams = z.object({ id: z.string().min(1) });
+export const dataSourceIdParams = z.object({ id: z.string().min(1) });
 export const ingestionIdParams = z.object({ ingestionId: z.string().min(1) });
 export const jobIdParams = z.object({ jobId: z.string().min(1) });
 export const syncDatasetIdParams = z.object({ datasetId: z.string().min(1) });
