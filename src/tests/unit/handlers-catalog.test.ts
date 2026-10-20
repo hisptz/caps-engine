@@ -13,6 +13,7 @@ import { thresholdGenerationConfigSchema } from "@/services/worker/services/hand
 import { alertGenerationConfigSchema } from "@/services/worker/services/handlers/alertGeneration/schemas/config.ts";
 import { predictionDataDownloadConfigSchema } from "@/services/worker/services/handlers/predictionDataDownload/schemas/config.ts";
 import { dhis2DataUploadConfigSchema } from "@/services/worker/services/handlers/dhis2DataUpload/schemas/config.ts";
+import { predictionPollConfigSchema } from "@/services/worker/services/handlers/predictionPoll/schemas/config.ts";
 import { dhis2AnalyticsRunConfigSchema } from "@/services/worker/services/handlers/dhis2AnalyticsRun/schemas/config.ts";
 
 describe("handler catalog", () => {
@@ -81,8 +82,15 @@ describe("handler catalog", () => {
   });
 
   it("validateHandlerConfig accepts handlers without config schema", () => {
-    expect(validateHandlerConfig("prediction-poll", undefined).success).toBe(true);
+    expect(validateHandlerConfig("climate-openeo-poll", undefined).success).toBe(true);
+    expect(validateHandlerConfig("climate-openeo-poll", {}).success).toBe(true);
+  });
+
+  it("validateHandlerConfig gives prediction-poll its default polling", () => {
     expect(validateHandlerConfig("prediction-poll", {}).success).toBe(true);
+    expect(validateHandlerConfig("prediction-poll", { polling: { maxAttempts: 0 } }).success).toBe(
+      false
+    );
   });
 });
 
@@ -131,6 +139,11 @@ describe("handler config JSON Schema round-trip", () => {
       name: "dhis2-data-upload",
       schema: dhis2DataUploadConfigSchema,
       valid: { importStrategy: "CREATE" },
+    },
+    {
+      name: "prediction-poll",
+      schema: predictionPollConfigSchema,
+      valid: { polling: { pollIntervalMs: 30000, maxAttempts: 240 } },
     },
     {
       name: "dhis2-analytics-run",

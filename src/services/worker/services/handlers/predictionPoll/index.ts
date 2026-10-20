@@ -1,6 +1,7 @@
 import { registerHandler, type StepHandler } from "@/services/worker/types/service.ts";
 import { Handlers } from "@/services/worker/constants/handlers.ts";
 import { getJobDescription, getJobStatus } from "@/services/worker/utils/chap.ts";
+import { predictionPollConfigSchema } from "@/services/worker/services/handlers/predictionPoll/schemas/config.ts";
 
 export const CHAP_SUCCESS_STATUS = "SUCCESS";
 export const CHAP_TERMINAL_FAILURE_STATUSES = new Set([
@@ -14,16 +15,14 @@ export const CHAP_TERMINAL_STATUSES = new Set([
   ...CHAP_TERMINAL_FAILURE_STATUSES,
 ]);
 
-/** Milliseconds to wait between poll attempts */
-const POLL_INTERVAL_MS = 5_000;
-/** Maximum number of poll attempts before giving up (~10 minutes) */
-const MAX_ATTEMPTS = 120;
-
 /**
  * Handler: prediction-poll
  *
  * Polls CHAP's GET /v1/jobs/{job_id} until the job reaches a terminal state.
  * Succeeds when status is "SUCCESS"; throws on FAILURE / REVOKED and legacy failed / cancelled.
+ *
+ * Config: { polling?: { pollIntervalMs?: number; maxAttempts?: number } }, by default
+ * every 5 seconds for 120 attempts (~10 minutes).
  *
  * Expected input (from the preceding prediction-trigger step):
  * { jobId: string }
@@ -33,6 +32,11 @@ const MAX_ATTEMPTS = 120;
  */
 export const predictionPoll: StepHandler = {
   async execute(ctx) {
+    const parsed = predictionPollConfigSchema.safeParse(ctx.handlerConfig ?? {});
+    if (!parsed.success) {
+      throw new Error(`Invalid prediction-poll handlerConfig: ${parsed.error.message}`);
+    }
+    const { pollIntervalMs, maxAttempts } = parsed.data.polling;
     const input = ctx.input as { jobId?: string; predictionSetupId?: number };
     const jobId = input?.jobId;
     const predictionSetupId = input?.predictionSetupId ?? null;
@@ -48,7 +52,7 @@ export const predictionPoll: StepHandler = {
     let attempts = 0;
     let lastStatus = "";
 
-    while (attempts < MAX_ATTEMPTS) {
+    while (attempts < maxAttempts) {
       attempts++;
 
       let status: string;
@@ -60,7 +64,7 @@ export const predictionPoll: StepHandler = {
           attempt: attempts,
           error: String(err),
         });
-        await sleep(POLL_INTERVAL_MS);
+        await sleep(pollIntervalMs);
         continue;
       }
 
@@ -94,12 +98,12 @@ export const predictionPoll: StepHandler = {
         return result;
       }
 
-      await sleep(POLL_INTERVAL_MS);
+      await sleep(pollIntervalMs);
     }
 
     const timeoutError = new Error(
-      `CHAP prediction job ${jobId} did not complete within ${MAX_ATTEMPTS} attempts (` +
-        `${(MAX_ATTEMPTS * POLL_INTERVAL_MS) / 60_000} minutes). Last status: "${lastStatus}"`
+      `CHAP prediction job ${jobId} did not complete within ${maxAttempts} attempts (` +
+        `${(maxAttempts * pollIntervalMs) / 60_000} minutes). Last status: "${lastStatus}"`
     );
     await task.fail(timeoutError);
     throw timeoutError;
