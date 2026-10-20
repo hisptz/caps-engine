@@ -84,4 +84,29 @@ describe("predictionPoll", () => {
 
     await expect(predictionPoll.execute(ctx)).rejects.toThrow(/failed/);
   });
+
+  it("gives up after the configured number of attempts", async () => {
+    mockGetJobStatus.mockResolvedValue("STARTED");
+    const task = buildMockTaskHandle();
+    const ctx = buildMockContext({
+      input: { jobId: "job-1" },
+      handlerConfig: { polling: { pollIntervalMs: 250, maxAttempts: 2 } },
+      tasks: { startTask: vi.fn().mockResolvedValue(task) },
+    });
+
+    await expect(predictionPoll.execute(ctx)).rejects.toThrow(/within 2 attempts/);
+    expect(mockGetJobStatus).toHaveBeenCalledTimes(2);
+    expect(task.fail).toHaveBeenCalled();
+  });
+
+  it("rejects an invalid polling config", async () => {
+    const ctx = buildMockContext({
+      input: { jobId: "job-1" },
+      handlerConfig: { polling: { maxAttempts: 0 } },
+    });
+
+    await expect(predictionPoll.execute(ctx)).rejects.toThrow(
+      /Invalid prediction-poll handlerConfig/
+    );
+  });
 });

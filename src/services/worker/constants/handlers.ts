@@ -7,6 +7,7 @@ import {
   predictionTriggerContextSchema,
 } from "@/services/worker/services/handlers/predictionTrigger/schemas/config.ts";
 import { predictionDataDownloadConfigSchema } from "@/services/worker/services/handlers/predictionDataDownload/schemas/config.ts";
+import { predictionPollConfigSchema } from "@/services/worker/services/handlers/predictionPoll/schemas/config.ts";
 import {
   thresholdGenerationConfigSchema,
   thresholdGenerationContextSchema,
@@ -124,7 +125,9 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       displayName: "Prediction Poll",
       description: "Poll for prediction generation status",
       tags: ["prediction", "chap"],
-      schemas: {},
+      schemas: {
+        config: predictionPollConfigSchema,
+      },
     },
   ],
   [
