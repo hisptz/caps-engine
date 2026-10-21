@@ -8,6 +8,7 @@ import { sendMessageConversation } from "@/services/worker/utils/dhis2.ts";
 import {
   formatNotificationDate,
   resolveNotificationTimeZone,
+  runUrl,
 } from "@/services/worker/utils/notifications.ts";
 import { dhis2NotifyConfigSchema } from "@/services/worker/services/handlers/dhis2Notify/schemas/config.ts";
 
@@ -78,8 +79,10 @@ registerHandler(Handlers.DHIS2_NOTIFY, dhis2Notify);
 
 function buildTemplateVariables(ctx: StepContext, timeZone: string): Record<string, unknown> {
   return {
+    pipelineName: ctx.pipelineName,
     stepName: ctx.step.name,
     executionId: ctx.stepExecution.executionId,
+    runUrl: runUrl(ctx.stepExecution.executionId),
     date: formatNotificationDate(new Date(), timeZone),
     input: ctx.input,
   };

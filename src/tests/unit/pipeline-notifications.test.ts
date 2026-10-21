@@ -47,8 +47,8 @@ describe("notifyPipelineFailure", () => {
     });
     const text = (body as { text: string }).text;
     expect(text).toContain('failed at step "Prediction Poll"');
-    expect(text).toContain("Run: exec-1");
     expect(text).toContain("Error: CHAP job FAILURE");
+    expect(text).toMatch(/\/api\/apps\/caps-app\/index\.html#\/executions\/exec-1$/);
   });
 
   it("does nothing when no failure recipients are configured", async () => {

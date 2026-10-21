@@ -76,6 +76,21 @@ export async function getJobStatus(jobId: string): Promise<string> {
 }
 
 /**
+ * GET /v1/jobs/{job_id}/logs
+ * The last `maxChars` of the log CHAP's worker captured for a job, or null when CHAP has none
+ * or cannot be asked. Never throws: it only enriches error messages.
+ */
+export async function getJobLogTail(jobId: string, maxChars = 1500): Promise<string | null> {
+  try {
+    const response = await chapClient.get<string>(`v1/jobs/${jobId}/logs`);
+    const logs = typeof response.data === "string" ? response.data.trim() : "";
+    return logs ? logs.slice(-maxChars) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * GET /jobs/{job_id} (full description via list endpoint filtered by ID)
  * Returns the full job description.
  */

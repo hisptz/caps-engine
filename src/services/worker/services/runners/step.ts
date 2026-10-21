@@ -275,9 +275,15 @@ export class StepRunner {
           stepId: step.id,
         });
 
+        const pipeline = await prisma.pipeline.findUnique({
+          where: { id: execution.pipelineId },
+          select: { name: true },
+        });
+
         const ctx: StepContext = {
           step,
           stepExecution,
+          pipelineName: pipeline?.name,
           pipelineContext,
           input: stepExecution.input,
           handlerConfig,

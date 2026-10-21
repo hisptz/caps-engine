@@ -26,11 +26,12 @@ describe("dhis2-notify handler", () => {
   it("sends a message conversation with rendered placeholders and passes input through", async () => {
     const input = { jobId: "job-1", status: "SUCCESS" };
     const ctx = buildMockContext({
+      pipelineName: "Malaria weekly",
       input,
       handlerConfig: {
         recipients: { userGroups: [GROUP], users: [USER] },
-        subject: "Prediction {{input.status}}",
-        message: "Job {{input.jobId}} finished at step {{stepName}}",
+        subject: "{{pipelineName}}: prediction {{input.status}}",
+        message: "Job {{input.jobId}} finished at step {{stepName}}. {{runUrl}}",
       },
     });
 
@@ -38,8 +39,10 @@ describe("dhis2-notify handler", () => {
 
     expect(output).toBe(input);
     expect(mockPost).toHaveBeenCalledWith("/messageConversations", {
-      subject: "Prediction SUCCESS",
-      text: `Job job-1 finished at step ${ctx.step.name}`,
+      subject: "Malaria weekly: prediction SUCCESS",
+      text: expect.stringMatching(
+        new RegExp(`^Job job-1 finished at step ${ctx.step.name}\\. https?://.+#/executions/.+$`)
+      ),
       users: [{ id: USER }],
       userGroups: [{ id: GROUP }],
     });

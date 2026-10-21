@@ -82,8 +82,20 @@ describe("handler catalog", () => {
   });
 
   it("validateHandlerConfig accepts handlers without config schema", () => {
-    expect(validateHandlerConfig("prediction-poll", undefined).success).toBe(true);
+    expect(validateHandlerConfig("climate-openeo-poll", undefined).success).toBe(true);
+    expect(validateHandlerConfig("climate-openeo-poll", {}).success).toBe(true);
+  });
+
+  it("validateHandlerConfig keeps existing prediction-poll steps valid and checks polling", () => {
     expect(validateHandlerConfig("prediction-poll", {}).success).toBe(true);
+    expect(
+      validateHandlerConfig("prediction-poll", {
+        polling: { intervalSeconds: 60, timeoutHours: 12 },
+      }).success
+    ).toBe(true);
+    expect(
+      validateHandlerConfig("prediction-poll", { polling: { intervalSeconds: 1 } }).success
+    ).toBe(false);
   });
 });
 

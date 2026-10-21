@@ -6,7 +6,7 @@ export const dhis2NotifyConfigSchema = z
     recipients: dhis2RecipientsSchema.default({ users: [], userGroups: [] }),
     /**
      * Message subject and body. `{{placeholders}}` are filled from the step context:
-     * `{{stepName}}`, `{{executionId}}`, `{{date}}`, and `{{input.<field>}}` for any
+     * `{{pipelineName}}`, `{{stepName}}`, `{{executionId}}`, `{{runUrl}}`, `{{date}}`, and `{{input.<field>}}` for any
      * field of the previous step's output (e.g. `{{input.imported}}` after DHIS2 Data Upload,
      * `{{input.jobId}}` after Prediction Poll).
      */

@@ -430,6 +430,48 @@ describe("PipelineCoordinator — queued steps (known handler)", () => {
     );
   });
 
+  it("handleStepResult permanent failure: fails without retrying, even with retries left", async () => {
+    const { coordinator } = buildCoordinator();
+
+    const pipeline = await seedPipeline(prisma);
+    const step = await seedStep(prisma, pipeline.id, {
+      handlerKey: Handlers.PREDICTION_POLL,
+      maxRetries: 3,
+      retryDelayMs: 1,
+    });
+    const execution = await seedExecution(prisma, pipeline.id, {
+      status: PipelineExecutionStatus.AWAITING_STEP,
+    });
+    const stepExec = await prisma.stepExecution.create({
+      data: {
+        executionId: execution.id,
+        stepId: step.id,
+        attemptNumber: 1,
+        status: StepExecutionStatus.FAILED,
+        startedAt: new Date(),
+        finishedAt: new Date(),
+        errorMessage: "CHAP prediction job job-1 FAILURE: model crashed",
+      },
+    });
+
+    await coordinator.handleStepResult({
+      executionId: execution.id,
+      stepExecutionId: stepExec.id,
+      succeeded: false,
+      errorMessage: "CHAP prediction job job-1 FAILURE: model crashed",
+      retryable: false,
+    });
+    await flushOutboxForTests(prisma, channel);
+
+    const exec = await getExecution(execution.id);
+    expect(exec.status).toBe(PipelineExecutionStatus.FAILED);
+    const attempts = await prisma.stepExecution.count({
+      where: { executionId: execution.id, stepId: step.id },
+    });
+    expect(attempts).toBe(1);
+    expect(channel.sendToQueue).not.toHaveBeenCalled();
+  });
+
   it("handleStepResult failure exhausted: marks execution FAILED, does not re-publish", async () => {
     const { coordinator } = buildCoordinator();
 

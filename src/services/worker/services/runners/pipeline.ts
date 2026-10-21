@@ -35,6 +35,8 @@ export interface PipelineJobMessage {
 export interface StepJobMessage {
   executionId: string;
   stepExecutionId: string; // pre-created by coordinator so worker can update it
+  /** Set on a re-check the worker scheduled for a waiting step (StepWaitingError) */
+  waitState?: Record<string, unknown>;
 }
 
 // Shape of a message on pipeline.step-results
@@ -45,6 +47,8 @@ export interface StepResultMessage {
   skipped?: boolean;
   output?: unknown;
   errorMessage?: string;
+  /** False when another attempt cannot help (StepPermanentError): no automatic retry */
+  retryable?: boolean;
 }
 
 // ============================================================
@@ -314,7 +318,7 @@ export class PipelineCoordinator {
   // Called by the step-results consumer when a queued step finishes
   async handleStepResult(msg: StepResultMessage): Promise<void> {
     const { prisma } = this.deps;
-    const { executionId, stepExecutionId, succeeded, output, errorMessage } = msg;
+    const { executionId, stepExecutionId, succeeded, output, errorMessage, retryable } = msg;
     logger.info(
       `[coordinator] Step result received executionId=${executionId} stepExecutionId=${stepExecutionId} succeeded=${succeeded}`
     );
@@ -374,9 +378,11 @@ export class PipelineCoordinator {
         where: { executionId, stepId: step.id },
       });
 
-      // Manual attempts never receive an automatic retry budget
+      // Manual attempts never receive an automatic retry budget, nor do permanent failures
       const mayAutoRetry =
-        stepExecution.attemptKind === StepAttemptKind.AUTOMATIC && attempts <= step.maxRetries;
+        retryable !== false &&
+        stepExecution.attemptKind === StepAttemptKind.AUTOMATIC &&
+        attempts <= step.maxRetries;
 
       if (mayAutoRetry) {
         await this.log(
@@ -420,14 +426,15 @@ export class PipelineCoordinator {
         return;
       }
 
-      // No retries left (or manual attempt failed)
+      // No retries left (or manual attempt failed, or a retry cannot help)
+      const reason = retryable === false ? "failed permanently" : "exhausted retries";
       await this.log(
         executionId,
         "ERROR",
-        `Queued step exhausted retries: ${step.name}. ${errorMessage ?? ""}`
+        `Queued step ${reason}: ${step.name}. ${errorMessage ?? ""}`
       );
       logger.error(
-        `[coordinator] Queued step exhausted retries executionId=${executionId} step="${step.name}" error="${errorMessage ?? ""}"`
+        `[coordinator] Queued step ${reason} executionId=${executionId} step="${step.name}" error="${errorMessage ?? ""}"`
       );
       await prisma.pipelineExecution.update({
         where: { id: executionId },

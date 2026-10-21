@@ -7,6 +7,7 @@ import {
   predictionTriggerContextSchema,
 } from "@/services/worker/services/handlers/predictionTrigger/schemas/config.ts";
 import { predictionDataDownloadConfigSchema } from "@/services/worker/services/handlers/predictionDataDownload/schemas/config.ts";
+import { predictionPollConfigSchema } from "@/services/worker/services/handlers/predictionPoll/schemas/config.ts";
 import {
   thresholdGenerationConfigSchema,
   thresholdGenerationContextSchema,
@@ -124,9 +125,12 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
     {
       queueName: "step.prediction-poll",
       displayName: "Prediction Poll",
-      description: "Poll for prediction generation status",
+      description:
+        "Wait for the CHAP prediction job: checks its status until CHAP reports success or failure",
       tags: ["prediction", "chap"],
-      schemas: {},
+      schemas: {
+        config: predictionPollConfigSchema,
+      },
     },
   ],
   [

@@ -1,6 +1,7 @@
 import { getDhis2ServerTimeZone, sendMessageConversation } from "@/services/worker/utils/dhis2.ts";
 import { hasRecipients, readPipelineNotifications } from "@/shared/pipeline/notifications.ts";
 import { logger } from "@/shared/utils";
+import { env } from "@/shared/utils/env.ts";
 
 const MAX_ERROR_LENGTH = 1_000;
 
@@ -18,6 +19,15 @@ function isValidTimeZone(timeZone: string | undefined): timeZone is string {
 export async function resolveNotificationTimeZone(): Promise<string> {
   const timeZone = await getDhis2ServerTimeZone();
   return isValidTimeZone(timeZone) ? timeZone : "UTC";
+}
+
+/** Where DHIS2 serves the installed CAPS app (its app key is `caps-app`). */
+const CAPS_APP_PATH = "api/apps/caps-app/index.html";
+
+/** Link to a run's page in the CAPS app installed on DHIS2. */
+export function runUrl(executionId: string): string {
+  const base = env.DHIS2_BASE_URL.replace(/\/+$/, "");
+  return `${base}/${CAPS_APP_PATH}#/executions/${encodeURIComponent(executionId)}`;
 }
 
 /** e.g. "20 Oct 2026, 13:08 (Africa/Nairobi)" */
@@ -66,12 +76,12 @@ export async function notifyPipelineFailure(args: {
       ? `The CAPS pipeline "${args.pipeline.name}" failed at step "${args.stepName}".`
       : `The CAPS pipeline "${args.pipeline.name}" failed.`,
     "",
-    `Run: ${args.executionId}`,
     `Time: ${formatNotificationDateTime(new Date(), timeZone)}`,
   ];
   if (error) {
     lines.push("", `Error: ${error.slice(0, MAX_ERROR_LENGTH)}`);
   }
+  lines.push("", "View the run and its logs in CAPS:", runUrl(args.executionId));
 
   try {
     await sendMessageConversation({
