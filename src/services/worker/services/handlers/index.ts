@@ -11,3 +11,4 @@ export * from "./thresholdGeneration";
 export * from "./alertGeneration";
 export * from "./eventDataUpload";
 export * from "./dhis2AnalyticsRun";
+export * from "./dhis2Notify";

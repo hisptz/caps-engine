@@ -22,6 +22,7 @@ import {
   dhis2InstancePullConfigSchema,
   dhis2InstancePullContextSchema,
 } from "@/services/worker/services/handlers/dhis2InstancePull/schemas/config.ts";
+import { dhis2NotifyConfigSchema } from "@/services/worker/services/handlers/dhis2Notify/schemas/config.ts";
 import type { ZodType } from "zod";
 
 export type HandlerRegistryEntry = {
@@ -50,6 +51,7 @@ export enum Handlers {
   THRESHOLD_GENERATION = "threshold-generation",
   ALERT_GENERATION = "alert-generation",
   EVENT_DATA_UPLOAD = "event-data-upload",
+  DHIS2_NOTIFY = "dhis2-notify",
 }
 
 export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
@@ -213,6 +215,19 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       description: "Uploads tracker events from a file to DHIS2",
       tags: ["dhis2", "alert"],
       schemas: {},
+    },
+  ],
+  [
+    Handlers.DHIS2_NOTIFY,
+    {
+      queueName: "step.dhis2-notify",
+      displayName: "DHIS2 Notify",
+      description:
+        "Sends a DHIS2 message (and email, when SMTP is configured) to users or user groups",
+      tags: ["dhis2", "notification"],
+      schemas: {
+        config: dhis2NotifyConfigSchema,
+      },
     },
   ],
 ]);

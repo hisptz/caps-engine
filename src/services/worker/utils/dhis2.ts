@@ -489,3 +489,45 @@ export function selectNewestJobIdAfter(args: {
   }
   return best?.jobId ?? null;
 }
+
+// ============================================================
+// Messaging
+// ============================================================
+
+/**
+ * POST /messageConversations
+ * Sends a DHIS2 internal message. DHIS2 forwards it by email to recipients who have
+ * message email notifications enabled, provided SMTP is configured on the instance.
+ */
+export async function sendMessageConversation(args: {
+  subject: string;
+  text: string;
+  users: string[];
+  userGroups: string[];
+}): Promise<void> {
+  await dhis2RestClient.post("/messageConversations", {
+    subject: args.subject,
+    text: args.text,
+    users: args.users.map((id) => ({ id })),
+    userGroups: args.userGroups.map((id) => ({ id })),
+  });
+}
+
+let serverTimeZone: string | undefined;
+
+/**
+ * GET /system/info → serverTimeZoneId, cached for the worker's lifetime.
+ * Returns undefined when DHIS2 can't be reached; the next call tries again.
+ */
+export async function getDhis2ServerTimeZone(): Promise<string | undefined> {
+  if (serverTimeZone) return serverTimeZone;
+  try {
+    const response = await dhis2RestClient.get<{ serverTimeZoneId?: string }>("/system/info", {
+      params: { fields: "serverTimeZoneId" },
+    });
+    serverTimeZone = response.data.serverTimeZoneId || undefined;
+  } catch {
+    return undefined;
+  }
+  return serverTimeZone;
+}

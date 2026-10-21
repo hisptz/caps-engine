@@ -3,6 +3,7 @@ import type { Channel, ConsumeMessage } from "amqplib";
 import { logger } from "@/shared/utils";
 import type { InputJsonValue } from "@prisma/client/runtime/client";
 import { QUEUES } from "@/services/worker/constants/monitor.ts";
+import { notifyPipelineFailure } from "@/services/worker/utils/notifications.ts";
 
 // ============================================================
 // Dead message metadata
@@ -106,6 +107,7 @@ export class DlxMonitor {
     try {
       const execution = await this.prisma.pipelineExecution.findUnique({
         where: { id: executionId },
+        include: { pipeline: { select: { name: true, config: true } } },
       });
 
       if (!execution) return;
@@ -140,6 +142,12 @@ export class DlxMonitor {
       logger.error(
         `[dlx-monitor] Marked execution FAILED: ${executionId} (from ${sourceQueue}, reason: ${reason})`
       );
+
+      await notifyPipelineFailure({
+        pipeline: execution.pipeline,
+        executionId,
+        errorMessage: `Message dead-lettered from ${sourceQueue} (${reason})`,
+      });
     } catch (err) {
       logger.error("[dlx-monitor] Failed to update execution status:", err);
     }

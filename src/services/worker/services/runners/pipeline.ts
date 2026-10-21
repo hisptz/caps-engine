@@ -15,6 +15,7 @@ import { resolveStepQueueName } from "@/shared/handlers/catalog.ts";
 import { logger } from "@/shared/utils";
 import { enqueueOutboxMessage } from "@/shared/pipeline/outbox.ts";
 import { snapshotFromPipelineStep } from "@/shared/pipeline/stepSnapshot.ts";
+import { notifyPipelineFailure } from "@/services/worker/utils/notifications.ts";
 
 export const PIPELINE_QUEUE = "pipeline.executions";
 export const STEP_RESULTS_QUEUE = "pipeline.step-results";
@@ -205,7 +206,7 @@ export class PipelineCoordinator {
     if (pendingAttempt) {
       const result = await stepRunner.runExisting(execution, pendingAttempt.id, step);
       if (!result.succeeded) {
-        await this.failExecution(executionId, execution.pipeline.name, step.name);
+        await this.failExecution(executionId, execution.pipeline, step.name, result.error?.message);
         return;
       }
       await this.finishInlineSuccess(executionId, stepIndex, result.output, context);
@@ -216,6 +217,7 @@ export class PipelineCoordinator {
     let attempt = 1;
     let succeeded = false;
     let stepOutput: unknown;
+    let lastError: Error | undefined;
 
     while (attempt <= step.maxRetries + 1) {
       if (attempt > 1) {
@@ -247,12 +249,13 @@ export class PipelineCoordinator {
         stepOutput = result.output;
         break;
       }
+      lastError = result.error;
 
       attempt++;
     }
 
     if (!succeeded) {
-      await this.failExecution(executionId, execution.pipeline.name, step.name);
+      await this.failExecution(executionId, execution.pipeline, step.name, lastError?.message);
       return;
     }
 
@@ -288,9 +291,11 @@ export class PipelineCoordinator {
 
   private async failExecution(
     executionId: string,
-    pipelineName: string,
-    stepName: string
+    pipeline: { name: string; config: unknown },
+    stepName: string,
+    errorMessage?: string
   ): Promise<void> {
+    const pipelineName = pipeline.name;
     await this.log(executionId, "ERROR", `Step exhausted retries: ${stepName}`);
     logger.error(
       `[coordinator] Inline step exhausted retries executionId=${executionId} step="${stepName}"`
@@ -303,6 +308,7 @@ export class PipelineCoordinator {
       "caps.pipeline.name": pipelineName,
       outcome: "failed",
     });
+    await notifyPipelineFailure({ pipeline, executionId, stepName, errorMessage });
   }
 
   // Called by the step-results consumer when a queued step finishes
@@ -430,6 +436,12 @@ export class PipelineCoordinator {
       pipelineExecutionCounter.add(1, {
         "caps.pipeline.name": execution.pipeline.name,
         outcome: "failed",
+      });
+      await notifyPipelineFailure({
+        pipeline: execution.pipeline,
+        executionId,
+        stepName: step.name,
+        errorMessage,
       });
       return;
     }
