@@ -4,7 +4,7 @@ import type { TrackerImportBody, TrackerImportReport } from "@/services/worker/t
 import type { StepContext } from "@/services/worker/types/service.ts";
 import { chunk, groupBy } from "lodash-es";
 import { PeriodUtility } from "@hisptz/dhis2-utils";
-import { AxiosError } from "axios";
+import { AxiosError, type AxiosInstance } from "axios";
 import type { DataValueImportStrategy } from "@/services/worker/services/handlers/dhis2DataUpload/schemas/config.ts";
 
 export type TrackerImportStrategy = "CREATE" | "UPDATE" | "CREATE_AND_UPDATE" | "DELETE";
@@ -76,13 +76,16 @@ export async function postDataValueSet({
   payload,
   ctx,
   importStrategy = "CREATE_AND_UPDATE",
+  client = dhis2RestClient,
 }: {
   payload: DataValueSet;
   ctx: StepContext;
   importStrategy?: DataValueImportStrategy;
+  /** Staging by default; a route client posts to a connected instance. */
+  client?: AxiosInstance;
 }): Promise<ImportSummary> {
   try {
-    const response = await dhis2RestClient.post<unknown>("/dataValueSets", payload, {
+    const response = await client.post<unknown>("/dataValueSets", payload, {
       params: { importStrategy },
     });
     return unwrapImportSummary(response.data);
@@ -488,4 +491,46 @@ export function selectNewestJobIdAfter(args: {
     if (!best || lastMs > best.lastMs) best = { jobId, lastMs };
   }
   return best?.jobId ?? null;
+}
+
+// ============================================================
+// Messaging
+// ============================================================
+
+/**
+ * POST /messageConversations
+ * Sends a DHIS2 internal message. DHIS2 forwards it by email to recipients who have
+ * message email notifications enabled, provided SMTP is configured on the instance.
+ */
+export async function sendMessageConversation(args: {
+  subject: string;
+  text: string;
+  users: string[];
+  userGroups: string[];
+}): Promise<void> {
+  await dhis2RestClient.post("/messageConversations", {
+    subject: args.subject,
+    text: args.text,
+    users: args.users.map((id) => ({ id })),
+    userGroups: args.userGroups.map((id) => ({ id })),
+  });
+}
+
+let serverTimeZone: string | undefined;
+
+/**
+ * GET /system/info → serverTimeZoneId, cached for the worker's lifetime.
+ * Returns undefined when DHIS2 can't be reached; the next call tries again.
+ */
+export async function getDhis2ServerTimeZone(): Promise<string | undefined> {
+  if (serverTimeZone) return serverTimeZone;
+  try {
+    const response = await dhis2RestClient.get<{ serverTimeZoneId?: string }>("/system/info", {
+      params: { fields: "serverTimeZoneId" },
+    });
+    serverTimeZone = response.data.serverTimeZoneId || undefined;
+  } catch {
+    return undefined;
+  }
+  return serverTimeZone;
 }

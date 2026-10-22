@@ -175,3 +175,30 @@ describe("climate-openeo-create context without a period", () => {
     expect(merged.orgUnit).toEqual(stepConfig.orgUnit);
   });
 });
+
+describe("resolveEffectiveHandlerConfig for dhis2-instance-push", () => {
+  const stepConfig = {
+    routeCode: "caps-src-hmis",
+    items: [{ from: "fbfJHSPpUQD" }],
+    orgUnit: { levels: [2] },
+    period: { mode: "updated", days: 7 },
+  };
+  const resolve = (override: Record<string, unknown>) =>
+    resolveEffectiveHandlerConfig({
+      handlerKey: "dhis2-instance-push",
+      handlerConfig: stepConfig,
+      pipelineContext: { steps: { "step-1": override } },
+      stepId: "step-1",
+    });
+
+  it("lets a run backfill a fixed range, leaving no `days` behind", () => {
+    const period = { mode: "fixed", periodType: "MONTHLY", start: "202401", end: "202512" };
+    expect(resolve({ period }).period).toEqual(period);
+  });
+
+  it("rejects an invalid period", () => {
+    expect(() => resolve({ period: { mode: "updated", days: 0 } })).toThrow(
+      EffectiveHandlerConfigError
+    );
+  });
+});

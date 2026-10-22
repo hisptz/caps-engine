@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ConcurrencyPolicy } from "@db/client";
 import { cronExprSchema } from "@/shared/utils/cron.ts";
+import { pipelineConfigSchema } from "@/shared/pipeline/notifications.ts";
 
 export const idParams = z.object({ id: z.uuid("Invalid pipeline ID") });
 export const stepParams = z.object({
@@ -20,7 +21,7 @@ export const listPipelinesQuery = z.object({
 export const createPipelineBody = z.object({
   name: z.string().min(1).max(255),
   description: z.string().optional(),
-  config: z.record(z.string(), z.unknown()).optional(),
+  config: pipelineConfigSchema.optional(),
   isActive: z.boolean().default(true),
   concurrencyPolicy: z.enum(ConcurrencyPolicy).default(ConcurrencyPolicy.SKIP),
 });
@@ -28,7 +29,7 @@ export const createPipelineBody = z.object({
 export const updatePipelineBody = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().nullable().optional(),
-  config: z.record(z.string(), z.unknown()).optional(),
+  config: pipelineConfigSchema.optional(),
   isActive: z.boolean().optional(),
   concurrencyPolicy: z.enum(ConcurrencyPolicy).optional(),
 });

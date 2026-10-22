@@ -15,6 +15,7 @@ import { resolveStepQueueName } from "@/shared/handlers/catalog.ts";
 import { logger } from "@/shared/utils";
 import { enqueueOutboxMessage } from "@/shared/pipeline/outbox.ts";
 import { snapshotFromPipelineStep } from "@/shared/pipeline/stepSnapshot.ts";
+import { notifyPipelineFailure } from "@/services/worker/utils/notifications.ts";
 
 export const PIPELINE_QUEUE = "pipeline.executions";
 export const STEP_RESULTS_QUEUE = "pipeline.step-results";
@@ -34,6 +35,8 @@ export interface PipelineJobMessage {
 export interface StepJobMessage {
   executionId: string;
   stepExecutionId: string; // pre-created by coordinator so worker can update it
+  /** Set on a re-check the worker scheduled for a waiting step (StepWaitingError) */
+  waitState?: Record<string, unknown>;
 }
 
 // Shape of a message on pipeline.step-results
@@ -44,6 +47,8 @@ export interface StepResultMessage {
   skipped?: boolean;
   output?: unknown;
   errorMessage?: string;
+  /** False when another attempt cannot help (StepPermanentError): no automatic retry */
+  retryable?: boolean;
 }
 
 // ============================================================
@@ -205,7 +210,7 @@ export class PipelineCoordinator {
     if (pendingAttempt) {
       const result = await stepRunner.runExisting(execution, pendingAttempt.id, step);
       if (!result.succeeded) {
-        await this.failExecution(executionId, execution.pipeline.name, step.name);
+        await this.failExecution(executionId, execution.pipeline, step.name, result.error?.message);
         return;
       }
       await this.finishInlineSuccess(executionId, stepIndex, result.output, context);
@@ -216,6 +221,7 @@ export class PipelineCoordinator {
     let attempt = 1;
     let succeeded = false;
     let stepOutput: unknown;
+    let lastError: Error | undefined;
 
     while (attempt <= step.maxRetries + 1) {
       if (attempt > 1) {
@@ -247,12 +253,13 @@ export class PipelineCoordinator {
         stepOutput = result.output;
         break;
       }
+      lastError = result.error;
 
       attempt++;
     }
 
     if (!succeeded) {
-      await this.failExecution(executionId, execution.pipeline.name, step.name);
+      await this.failExecution(executionId, execution.pipeline, step.name, lastError?.message);
       return;
     }
 
@@ -288,9 +295,11 @@ export class PipelineCoordinator {
 
   private async failExecution(
     executionId: string,
-    pipelineName: string,
-    stepName: string
+    pipeline: { name: string; config: unknown },
+    stepName: string,
+    errorMessage?: string
   ): Promise<void> {
+    const pipelineName = pipeline.name;
     await this.log(executionId, "ERROR", `Step exhausted retries: ${stepName}`);
     logger.error(
       `[coordinator] Inline step exhausted retries executionId=${executionId} step="${stepName}"`
@@ -303,12 +312,13 @@ export class PipelineCoordinator {
       "caps.pipeline.name": pipelineName,
       outcome: "failed",
     });
+    await notifyPipelineFailure({ pipeline, executionId, stepName, errorMessage });
   }
 
   // Called by the step-results consumer when a queued step finishes
   async handleStepResult(msg: StepResultMessage): Promise<void> {
     const { prisma } = this.deps;
-    const { executionId, stepExecutionId, succeeded, output, errorMessage } = msg;
+    const { executionId, stepExecutionId, succeeded, output, errorMessage, retryable } = msg;
     logger.info(
       `[coordinator] Step result received executionId=${executionId} stepExecutionId=${stepExecutionId} succeeded=${succeeded}`
     );
@@ -368,9 +378,11 @@ export class PipelineCoordinator {
         where: { executionId, stepId: step.id },
       });
 
-      // Manual attempts never receive an automatic retry budget
+      // Manual attempts never receive an automatic retry budget, nor do permanent failures
       const mayAutoRetry =
-        stepExecution.attemptKind === StepAttemptKind.AUTOMATIC && attempts <= step.maxRetries;
+        retryable !== false &&
+        stepExecution.attemptKind === StepAttemptKind.AUTOMATIC &&
+        attempts <= step.maxRetries;
 
       if (mayAutoRetry) {
         await this.log(
@@ -414,14 +426,15 @@ export class PipelineCoordinator {
         return;
       }
 
-      // No retries left (or manual attempt failed)
+      // No retries left (or manual attempt failed, or a retry cannot help)
+      const reason = retryable === false ? "failed permanently" : "exhausted retries";
       await this.log(
         executionId,
         "ERROR",
-        `Queued step exhausted retries: ${step.name}. ${errorMessage ?? ""}`
+        `Queued step ${reason}: ${step.name}. ${errorMessage ?? ""}`
       );
       logger.error(
-        `[coordinator] Queued step exhausted retries executionId=${executionId} step="${step.name}" error="${errorMessage ?? ""}"`
+        `[coordinator] Queued step ${reason} executionId=${executionId} step="${step.name}" error="${errorMessage ?? ""}"`
       );
       await prisma.pipelineExecution.update({
         where: { id: executionId },
@@ -430,6 +443,12 @@ export class PipelineCoordinator {
       pipelineExecutionCounter.add(1, {
         "caps.pipeline.name": execution.pipeline.name,
         outcome: "failed",
+      });
+      await notifyPipelineFailure({
+        pipeline: execution.pipeline,
+        executionId,
+        stepName: step.name,
+        errorMessage,
       });
       return;
     }

@@ -75,6 +75,8 @@ export function isOpenForPeriod(unit: OrgUnitRow | undefined, periodStart: strin
 export type MatchedOrgUnits = {
   stagingBySource: Map<string, string>;
   unmatched: string[];
+  /** The matched org units as `source` has them, by source ID. */
+  sourceUnits: Map<string, OrgUnitRow>;
 };
 
 /**
@@ -88,8 +90,9 @@ export async function matchOrgUnits(
   codes?: Map<string, string>
 ): Promise<MatchedOrgUnits> {
   const stagingBySource = new Map<string, string>();
+  let onSource: OrgUnitRow[];
   if (codes) {
-    const onSource = await findOrgUnits(source, "code", [...new Set(codes.values())], batchSize);
+    onSource = await findOrgUnits(source, "code", [...new Set(codes.values())], batchSize);
     const sourceByCode = new Map(
       onSource.flatMap((unit) => (unit.code ? [[unit.code, unit.id] as const] : []))
     );
@@ -99,9 +102,15 @@ export async function matchOrgUnits(
       if (sourceId) stagingBySource.set(sourceId, id);
     }
   } else {
-    const onSource = await findOrgUnits(source, "id", stagingIds, batchSize);
+    onSource = await findOrgUnits(source, "id", stagingIds, batchSize);
     for (const { id } of onSource) stagingBySource.set(id, id);
   }
   const matched = new Set(stagingBySource.values());
-  return { stagingBySource, unmatched: stagingIds.filter((id) => !matched.has(id)) };
+  return {
+    stagingBySource,
+    unmatched: stagingIds.filter((id) => !matched.has(id)),
+    sourceUnits: new Map(
+      onSource.filter((unit) => stagingBySource.has(unit.id)).map((unit) => [unit.id, unit])
+    ),
+  };
 }

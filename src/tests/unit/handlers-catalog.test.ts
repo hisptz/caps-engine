@@ -18,7 +18,7 @@ import { dhis2AnalyticsRunConfigSchema } from "@/services/worker/services/handle
 describe("handler catalog", () => {
   it("lists all registered handlers with display metadata", () => {
     const handlers = listHandlerDescriptors();
-    expect(handlers).toHaveLength(13);
+    expect(handlers).toHaveLength(15);
     const keys = handlers.map((h) => h.key).sort();
     expect(keys).toEqual(
       [
@@ -30,6 +30,8 @@ describe("handler catalog", () => {
         "dhis2-analytics-run",
         "dhis2-data-upload",
         "dhis2-instance-pull",
+        "dhis2-instance-push",
+        "dhis2-notify",
         "event-data-upload",
         "prediction-data-download",
         "prediction-poll",
@@ -81,8 +83,20 @@ describe("handler catalog", () => {
   });
 
   it("validateHandlerConfig accepts handlers without config schema", () => {
-    expect(validateHandlerConfig("prediction-poll", undefined).success).toBe(true);
+    expect(validateHandlerConfig("climate-openeo-poll", undefined).success).toBe(true);
+    expect(validateHandlerConfig("climate-openeo-poll", {}).success).toBe(true);
+  });
+
+  it("validateHandlerConfig keeps existing prediction-poll steps valid and checks polling", () => {
     expect(validateHandlerConfig("prediction-poll", {}).success).toBe(true);
+    expect(
+      validateHandlerConfig("prediction-poll", {
+        polling: { intervalSeconds: 60, timeoutHours: 12 },
+      }).success
+    ).toBe(true);
+    expect(
+      validateHandlerConfig("prediction-poll", { polling: { intervalSeconds: 1 } }).success
+    ).toBe(false);
   });
 });
 

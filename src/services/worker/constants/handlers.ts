@@ -7,6 +7,7 @@ import {
   predictionTriggerContextSchema,
 } from "@/services/worker/services/handlers/predictionTrigger/schemas/config.ts";
 import { predictionDataDownloadConfigSchema } from "@/services/worker/services/handlers/predictionDataDownload/schemas/config.ts";
+import { predictionPollConfigSchema } from "@/services/worker/services/handlers/predictionPoll/schemas/config.ts";
 import {
   thresholdGenerationConfigSchema,
   thresholdGenerationContextSchema,
@@ -22,6 +23,11 @@ import {
   dhis2InstancePullConfigSchema,
   dhis2InstancePullContextSchema,
 } from "@/services/worker/services/handlers/dhis2InstancePull/schemas/config.ts";
+import {
+  dhis2InstancePushConfigSchema,
+  dhis2InstancePushContextSchema,
+} from "@/services/worker/services/handlers/dhis2InstancePush/schemas/config.ts";
+import { dhis2NotifyConfigSchema } from "@/services/worker/services/handlers/dhis2Notify/schemas/config.ts";
 import type { ZodType } from "zod";
 
 export type HandlerRegistryEntry = {
@@ -45,11 +51,13 @@ export enum Handlers {
   PREDICTION_POLL = "prediction-poll",
   PREDICTION_DATA_DOWNLOAD = "prediction-data-download",
   DHIS2_INSTANCE_PULL = "dhis2-instance-pull",
+  DHIS2_INSTANCE_PUSH = "dhis2-instance-push",
   DHIS2_DATA_UPLOAD = "dhis2-data-upload",
   DHIS2_ANALYTICS_RUN = "dhis2-analytics-run",
   THRESHOLD_GENERATION = "threshold-generation",
   ALERT_GENERATION = "alert-generation",
   EVENT_DATA_UPLOAD = "event-data-upload",
+  DHIS2_NOTIFY = "dhis2-notify",
 }
 
 export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
@@ -122,9 +130,12 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
     {
       queueName: "step.prediction-poll",
       displayName: "Prediction Poll",
-      description: "Poll for prediction generation status",
+      description:
+        "Wait for the CHAP prediction job: checks its status until CHAP reports success or failure",
       tags: ["prediction", "chap"],
-      schemas: {},
+      schemas: {
+        config: predictionPollConfigSchema,
+      },
     },
   ],
   [
@@ -150,6 +161,21 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       schemas: {
         config: dhis2InstancePullConfigSchema,
         context: dhis2InstancePullContextSchema,
+      },
+      contextReplaces: ["period"],
+    },
+  ],
+  [
+    Handlers.DHIS2_INSTANCE_PUSH,
+    {
+      queueName: "step.dhis2-instance-push",
+      displayName: "DHIS2 Instance Push",
+      description:
+        "Sends data values from staging to another DHIS2 instance through a staging route",
+      tags: ["dhis2", "push"],
+      schemas: {
+        config: dhis2InstancePushConfigSchema,
+        context: dhis2InstancePushContextSchema,
       },
       contextReplaces: ["period"],
     },
@@ -213,6 +239,19 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       description: "Uploads tracker events from a file to DHIS2",
       tags: ["dhis2", "alert"],
       schemas: {},
+    },
+  ],
+  [
+    Handlers.DHIS2_NOTIFY,
+    {
+      queueName: "step.dhis2-notify",
+      displayName: "DHIS2 Notify",
+      description:
+        "Sends a DHIS2 message (and email, when SMTP is configured) to users or user groups",
+      tags: ["dhis2", "notification"],
+      schemas: {
+        config: dhis2NotifyConfigSchema,
+      },
     },
   ],
 ]);

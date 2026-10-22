@@ -41,13 +41,13 @@ export function describeRouteError(error: unknown, routeCode: string): string {
       return `Could not reach staging DHIS2 to run route "${routeCode}": ${error.message}`;
     case 401:
     case 403:
-      return `Route "${routeCode}" refused the request (HTTP ${status}). Either the CAPS user lacks the route's authorities on staging, or the source instance rejected the route's credentials.`;
+      return `Route "${routeCode}" refused the request (HTTP ${status}). Either the CAPS user lacks the route's authorities on staging, or the connected instance rejected the route's credentials.`;
     case 404:
-      return `Route "${routeCode}" or the requested source API path was not found (HTTP 404). Check that the route exists on staging and that its URL ends with /api/**.`;
+      return `Route "${routeCode}" or the requested API path on the connected instance was not found (HTTP 404). Check that the route exists on staging and that its URL ends with /api/**.`;
     case 502:
     case 503:
     case 504:
-      return `Route "${routeCode}" could not get an answer from the source instance (HTTP ${status}). It may be down, or the request took longer than the route timeout.`;
+      return `Route "${routeCode}" could not get an answer from the connected instance (HTTP ${status}). It may be down, or the request took longer than the route timeout.`;
     default: {
       const data = error.response?.data as { message?: unknown } | undefined;
       const detail = typeof data?.message === "string" ? `: ${data.message}` : "";

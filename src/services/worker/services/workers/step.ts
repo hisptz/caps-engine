@@ -1,6 +1,12 @@
 import { PrismaClient, StepExecutionStatus, LogLevel, PipelineExecutionStatus } from "@db/client";
 import type { Channel } from "amqplib";
-import { resolveHandler, StepSkippedError } from "@/services/worker/types/service.ts";
+import {
+  resolveHandler,
+  StepPermanentError,
+  StepSkippedError,
+  StepWaitingError,
+} from "@/services/worker/types/service.ts";
+import { resolveStepQueueName } from "@/shared/handlers/catalog.ts";
 import { logger } from "@/shared/utils";
 import {
   STEP_RESULTS_QUEUE,
@@ -32,7 +38,7 @@ export class StepWorker {
 
   async handle(msg: StepJobMessage): Promise<void> {
     const { prisma } = this.deps;
-    const { executionId, stepExecutionId } = msg;
+    const { executionId, stepExecutionId, waitState } = msg;
 
     const stepExecution = await prisma.stepExecution.findUnique({
       where: { id: stepExecutionId },
@@ -40,7 +46,10 @@ export class StepWorker {
     });
 
     const execution = stepExecution
-      ? await prisma.pipelineExecution.findUnique({ where: { id: executionId } })
+      ? await prisma.pipelineExecution.findUnique({
+          where: { id: executionId },
+          include: { pipeline: { select: { name: true } } },
+        })
       : null;
 
     if (!stepExecution || !execution) {
@@ -94,9 +103,12 @@ export class StepWorker {
     const startMs = Date.now();
 
     logger.info(
-      `[step-worker] Picked up job executionId=${executionId} stepExecutionId=${stepExecutionId} step="${step.name}"`
+      `[step-worker] Picked up job executionId=${executionId} stepExecutionId=${stepExecutionId} step="${step.name}"${waitState ? " (re-check)" : ""}`
     );
-    await this.log(executionId, stepExecutionId, "INFO", `Step worker executing: ${step.name}`);
+    // A waiting step is re-checked many times; the execution log records only its first run.
+    if (!waitState) {
+      await this.log(executionId, stepExecutionId, "INFO", `Step worker executing: ${step.name}`);
+    }
 
     try {
       const handler = resolveHandler(step.handlerKey);
@@ -112,12 +124,14 @@ export class StepWorker {
       const ctx = {
         step,
         stepExecution,
+        pipelineName: execution.pipeline.name,
         pipelineContext: context,
         input,
         handlerConfig,
         log: (level: "DEBUG" | "INFO" | "WARN" | "ERROR", message: string, metadata = {}) =>
           this.log(executionId, stepExecutionId, level, message, metadata),
         tasks,
+        waitState,
       };
 
       const output = await handler.execute(ctx);
@@ -144,6 +158,14 @@ export class StepWorker {
         `[step-worker] Step succeeded executionId=${executionId} stepExecutionId=${stepExecutionId} step="${step.name}" durationMs=${Date.now() - startMs}`
       );
     } catch (error) {
+      if (error instanceof StepWaitingError) {
+        await this.scheduleRecheck(msg, step, error);
+        logger.info(
+          `[step-worker] Step waiting executionId=${executionId} stepExecutionId=${stepExecutionId} step="${step.name}" reason="${error.message}" retryAfterMs=${error.retryAfterMs}`
+        );
+        return;
+      }
+
       if (error instanceof StepSkippedError) {
         await this.log(executionId, stepExecutionId, "INFO", `Step skipped: ${step.name}`, {
           reason: error.message,
@@ -175,9 +197,11 @@ export class StepWorker {
       }
 
       const err = error instanceof Error ? error : new Error(String(error));
+      const permanent = error instanceof StepPermanentError;
 
       await this.log(executionId, stepExecutionId, "ERROR", `Step worker failed: ${step.name}`, {
         error: err.message,
+        ...(permanent ? { retryable: false } : {}),
       });
 
       await prisma.stepExecution.update({
@@ -196,12 +220,59 @@ export class StepWorker {
           stepExecutionId,
           succeeded: false,
           errorMessage: errorColumns(err).errorMessage,
+          ...(permanent ? { retryable: false } : {}),
         } satisfies StepResultMessage,
       });
       logger.error(
         `[step-worker] Step failed executionId=${executionId} stepExecutionId=${stepExecutionId} step="${step.name}" error="${err.message}" durationMs=${Date.now() - startMs}`
       );
     }
+  }
+
+  /**
+   * Keep a waiting attempt RUNNING, record what it is waiting for, and queue the same attempt
+   * again after `retryAfterMs`. One transaction, so a crash cannot lose the re-check, and
+   * nothing is queued once the attempt has left RUNNING (e.g. cancelled meanwhile).
+   */
+  private async scheduleRecheck(
+    msg: StepJobMessage,
+    step: { name: string; handlerKey: string },
+    waiting: StepWaitingError
+  ): Promise<void> {
+    const queueName = resolveStepQueueName(step.handlerKey);
+    if (!queueName) {
+      throw new Error(`Step "${step.name}" asked to wait but has no queue to re-check on`);
+    }
+    const now = new Date();
+    const recheckAt = new Date(now.getTime() + waiting.retryAfterMs);
+
+    await this.deps.prisma.$transaction(async (tx) => {
+      const updated = await tx.stepExecution.updateMany({
+        where: { id: msg.stepExecutionId, status: StepExecutionStatus.RUNNING },
+        data: {
+          output: {
+            waiting: {
+              reason: waiting.message,
+              lastCheckedAt: now.toISOString(),
+              nextCheckAt: recheckAt.toISOString(),
+              ...(waiting.state ?? {}),
+            },
+          },
+        },
+      });
+      if (updated.count === 0) {
+        return;
+      }
+      await enqueueOutboxMessage(tx, {
+        destination: queueName,
+        availableAt: recheckAt,
+        payload: {
+          executionId: msg.executionId,
+          stepExecutionId: msg.stepExecutionId,
+          waitState: waiting.state ?? {},
+        } satisfies StepJobMessage,
+      });
+    });
   }
 
   private async log(

@@ -150,11 +150,18 @@ export class MonitoringQueries {
         },
       }),
 
-      // Pipelines stuck in AWAITING_STEP for more than 10 minutes
+      // Pipelines stuck in AWAITING_STEP for more than 10 minutes. A step that is waiting
+      // (e.g. on a CHAP job) updates its attempt on every check, so it is not stuck.
       this.prisma.pipelineExecution.findMany({
         where: {
           status: PipelineExecutionStatus.AWAITING_STEP,
           updatedAt: { lte: new Date(Date.now() - 10 * 60 * 1000) },
+          stepExecutions: {
+            none: {
+              status: StepExecutionStatus.RUNNING,
+              updatedAt: { gt: new Date(Date.now() - 10 * 60 * 1000) },
+            },
+          },
         },
         include: { pipeline: { select: { name: true } } },
         orderBy: { updatedAt: "asc" },
