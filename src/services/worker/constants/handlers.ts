@@ -23,6 +23,10 @@ import {
   dhis2InstancePullConfigSchema,
   dhis2InstancePullContextSchema,
 } from "@/services/worker/services/handlers/dhis2InstancePull/schemas/config.ts";
+import {
+  dhis2InstancePushConfigSchema,
+  dhis2InstancePushContextSchema,
+} from "@/services/worker/services/handlers/dhis2InstancePush/schemas/config.ts";
 import { dhis2NotifyConfigSchema } from "@/services/worker/services/handlers/dhis2Notify/schemas/config.ts";
 import type { ZodType } from "zod";
 
@@ -47,6 +51,7 @@ export enum Handlers {
   PREDICTION_POLL = "prediction-poll",
   PREDICTION_DATA_DOWNLOAD = "prediction-data-download",
   DHIS2_INSTANCE_PULL = "dhis2-instance-pull",
+  DHIS2_INSTANCE_PUSH = "dhis2-instance-push",
   DHIS2_DATA_UPLOAD = "dhis2-data-upload",
   DHIS2_ANALYTICS_RUN = "dhis2-analytics-run",
   THRESHOLD_GENERATION = "threshold-generation",
@@ -156,6 +161,21 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       schemas: {
         config: dhis2InstancePullConfigSchema,
         context: dhis2InstancePullContextSchema,
+      },
+      contextReplaces: ["period"],
+    },
+  ],
+  [
+    Handlers.DHIS2_INSTANCE_PUSH,
+    {
+      queueName: "step.dhis2-instance-push",
+      displayName: "DHIS2 Instance Push",
+      description:
+        "Sends data values from staging to another DHIS2 instance through a staging route",
+      tags: ["dhis2", "push"],
+      schemas: {
+        config: dhis2InstancePushConfigSchema,
+        context: dhis2InstancePushContextSchema,
       },
       contextReplaces: ["period"],
     },

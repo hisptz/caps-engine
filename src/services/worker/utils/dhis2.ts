@@ -4,7 +4,7 @@ import type { TrackerImportBody, TrackerImportReport } from "@/services/worker/t
 import type { StepContext } from "@/services/worker/types/service.ts";
 import { chunk, groupBy } from "lodash-es";
 import { PeriodUtility } from "@hisptz/dhis2-utils";
-import { AxiosError } from "axios";
+import { AxiosError, type AxiosInstance } from "axios";
 import type { DataValueImportStrategy } from "@/services/worker/services/handlers/dhis2DataUpload/schemas/config.ts";
 
 export type TrackerImportStrategy = "CREATE" | "UPDATE" | "CREATE_AND_UPDATE" | "DELETE";
@@ -76,13 +76,16 @@ export async function postDataValueSet({
   payload,
   ctx,
   importStrategy = "CREATE_AND_UPDATE",
+  client = dhis2RestClient,
 }: {
   payload: DataValueSet;
   ctx: StepContext;
   importStrategy?: DataValueImportStrategy;
+  /** Staging by default; a route client posts to a connected instance. */
+  client?: AxiosInstance;
 }): Promise<ImportSummary> {
   try {
-    const response = await dhis2RestClient.post<unknown>("/dataValueSets", payload, {
+    const response = await client.post<unknown>("/dataValueSets", payload, {
       params: { importStrategy },
     });
     return unwrapImportSummary(response.data);

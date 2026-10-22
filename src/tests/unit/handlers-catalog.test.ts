@@ -18,7 +18,7 @@ import { dhis2AnalyticsRunConfigSchema } from "@/services/worker/services/handle
 describe("handler catalog", () => {
   it("lists all registered handlers with display metadata", () => {
     const handlers = listHandlerDescriptors();
-    expect(handlers).toHaveLength(14);
+    expect(handlers).toHaveLength(15);
     const keys = handlers.map((h) => h.key).sort();
     expect(keys).toEqual(
       [
@@ -30,6 +30,7 @@ describe("handler catalog", () => {
         "dhis2-analytics-run",
         "dhis2-data-upload",
         "dhis2-instance-pull",
+        "dhis2-instance-push",
         "dhis2-notify",
         "event-data-upload",
         "prediction-data-download",
