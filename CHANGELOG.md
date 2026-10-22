@@ -1,3 +1,9 @@
+# [3.1.0](https://github.com/hisptz/caps-engine/compare/v3.0.0...v3.1.0) (2026-10-22)
+
+### Features
+
+- Support for notification trigger and pushing data to other instances ([#12](https://github.com/hisptz/caps-engine/issues/12)) ([9ecb035](https://github.com/hisptz/caps-engine/commit/9ecb0354fbc48b288569e1531d53732a953c18f0))
+
 # [3.0.0](https://github.com/hisptz/caps-engine/compare/v2.0.0...v3.0.0) (2026-10-14)
 
 - fix!: name an Open Climate Service export in climate-openeo-create ([616bede](https://github.com/hisptz/caps-engine/commit/616bede4ef82457b3710cf24d68e48c3144fb2ea))
