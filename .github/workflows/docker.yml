@@ -1,10 +1,11 @@
 name: Docker
 
 on:
-  push:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
     branches: [main]
-  release:
-    types: [published]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -13,6 +14,7 @@ env:
 jobs:
   build-and-push:
     name: Build & Push ${{ matrix.image }}
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -24,6 +26,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find the release tag on this commit
+        id: version
+        run: echo "tag=$(git describe --tags --exact-match 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -38,10 +46,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.image }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
             type=sha,prefix=sha-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.tag }},enable=${{ steps.version.outputs.tag != '' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.tag }},enable=${{ steps.version.outputs.tag != '' }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
