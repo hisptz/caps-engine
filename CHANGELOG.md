@@ -1,3 +1,9 @@
+## [3.1.1](https://github.com/hisptz/caps-engine/compare/v3.1.0...v3.1.1) (2026-10-27)
+
+### Bug Fixes
+
+- notification url bug and improving error handling for rabbitMQ connection ([#14](https://github.com/hisptz/caps-engine/issues/14)) ([a8cd6d3](https://github.com/hisptz/caps-engine/commit/a8cd6d327234d74bb183fbc41102f4522c75731f))
+
 # [3.1.0](https://github.com/hisptz/caps-engine/compare/v3.0.0...v3.1.0) (2026-10-22)
 
 ### Features
