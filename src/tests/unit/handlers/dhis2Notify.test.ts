@@ -48,6 +48,28 @@ describe("dhis2-notify handler", () => {
     });
   });
 
+  it("links the run on DHIS2's public URL from system/info", async () => {
+    vi.mocked(dhis2RestClient.get).mockResolvedValue({
+      data: { contextPath: "https://dhis2.example.org/caps" },
+    });
+    const ctx = buildMockContext({
+      handlerConfig: {
+        recipients: { userGroups: [GROUP] },
+        subject: "s",
+        message: "{{runUrl}}",
+      },
+    });
+
+    await dhis2Notify.execute(ctx);
+
+    expect(mockPost).toHaveBeenCalledWith(
+      "/messageConversations",
+      expect.objectContaining({
+        text: `https://dhis2.example.org/caps/api/apps/caps-app/index.html#/executions/${ctx.stepExecution.executionId}`,
+      })
+    );
+  });
+
   it("does not fail the step when sending fails and failOnError is false", async () => {
     mockPost.mockRejectedValue(new Error("SMTP down"));
     const ctx = buildMockContext({
