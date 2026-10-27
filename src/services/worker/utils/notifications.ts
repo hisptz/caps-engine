@@ -1,4 +1,8 @@
-import { getDhis2ServerTimeZone, sendMessageConversation } from "@/services/worker/utils/dhis2.ts";
+import {
+  getDhis2ContextPath,
+  getDhis2ServerTimeZone,
+  sendMessageConversation,
+} from "@/services/worker/utils/dhis2.ts";
 import { hasRecipients, readPipelineNotifications } from "@/shared/pipeline/notifications.ts";
 import { logger } from "@/shared/utils";
 import { env } from "@/shared/utils/env.ts";
@@ -24,9 +28,9 @@ export async function resolveNotificationTimeZone(): Promise<string> {
 /** Where DHIS2 serves the installed CAPS app (its app key is `caps-app`). */
 const CAPS_APP_PATH = "api/apps/caps-app/index.html";
 
-/** Link to a run's page in the CAPS app installed on DHIS2. */
-export function runUrl(executionId: string): string {
-  const base = env.DHIS2_BASE_URL.replace(/\/+$/, "");
+/** Link to a run's page in the CAPS app, on DHIS2's public URL when DHIS2 reports one. */
+export async function runUrl(executionId: string): Promise<string> {
+  const base = ((await getDhis2ContextPath()) ?? env.DHIS2_BASE_URL).replace(/\/+$/, "");
   return `${base}/${CAPS_APP_PATH}#/executions/${encodeURIComponent(executionId)}`;
 }
 
@@ -81,7 +85,7 @@ export async function notifyPipelineFailure(args: {
   if (error) {
     lines.push("", `Error: ${error.slice(0, MAX_ERROR_LENGTH)}`);
   }
-  lines.push("", "View the run and its logs in CAPS:", runUrl(args.executionId));
+  lines.push("", "View the run and its logs in CAPS:", await runUrl(args.executionId));
 
   try {
     await sendMessageConversation({
