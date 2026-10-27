@@ -44,6 +44,9 @@ export class OutboxPublisher {
 
   async start(): Promise<void> {
     this.confirmChannel = await this.connection.createConfirmChannel();
+    this.confirmChannel.on("error", (err) => {
+      logger.error("[outbox] Confirm channel error:", err);
+    });
     this.timer = setInterval(() => {
       void this.tick();
     }, this.pollIntervalMs);
@@ -80,54 +83,32 @@ export class OutboxPublisher {
     }
   }
 
+  /**
+   * Claims a batch in a single statement. SKIP LOCKED lets concurrent publishers
+   * pick disjoint rows instead of blocking on each other's row locks.
+   */
   private async claimBatch(): Promise<OutboxMessage[]> {
     const now = new Date();
     const leaseExpiredBefore = new Date(now.getTime() - this.leaseMs);
 
-    return this.prisma.$transaction(async (tx) => {
-      const candidates = await tx.outboxMessage.findMany({
-        where: {
-          OR: [
-            { status: OutboxDeliveryStatus.PENDING, availableAt: { lte: now } },
-            {
-              status: OutboxDeliveryStatus.LEASED,
-              leasedAt: { lte: leaseExpiredBefore },
-            },
-          ],
-        },
-        orderBy: { createdAt: "asc" },
-        take: this.batchSize,
-      });
+    const claimed = await this.prisma.$queryRaw<OutboxMessage[]>`
+      UPDATE "outbox_messages"
+      SET "status" = 'LEASED',
+          "leaseOwner" = ${this.ownerId},
+          "leasedAt" = ${now},
+          "publishAttempts" = "publishAttempts" + 1,
+          "updatedAt" = ${now}
+      WHERE "id" IN (
+        SELECT "id" FROM "outbox_messages"
+        WHERE ("status" = 'PENDING' AND "availableAt" <= ${now})
+           OR ("status" = 'LEASED' AND "leasedAt" <= ${leaseExpiredBefore})
+        ORDER BY "createdAt" ASC
+        LIMIT ${this.batchSize}
+        FOR UPDATE SKIP LOCKED
+      )
+      RETURNING *`;
 
-      const claimed: OutboxMessage[] = [];
-      for (const candidate of candidates) {
-        const updated = await tx.outboxMessage.updateMany({
-          where: {
-            id: candidate.id,
-            OR: [
-              { status: OutboxDeliveryStatus.PENDING },
-              {
-                status: OutboxDeliveryStatus.LEASED,
-                leasedAt: { lte: leaseExpiredBefore },
-              },
-            ],
-          },
-          data: {
-            status: OutboxDeliveryStatus.LEASED,
-            leaseOwner: this.ownerId,
-            leasedAt: now,
-            publishAttempts: { increment: 1 },
-          },
-        });
-        if (updated.count === 1) {
-          const row = await tx.outboxMessage.findUniqueOrThrow({
-            where: { id: candidate.id },
-          });
-          claimed.push(row);
-        }
-      }
-      return claimed;
-    });
+    return claimed.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
 
   private async publishOne(message: OutboxMessage): Promise<void> {

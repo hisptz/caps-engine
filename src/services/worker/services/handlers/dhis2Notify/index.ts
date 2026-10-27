@@ -31,7 +31,11 @@ export const dhis2Notify: StepHandler = {
     }
     const { recipients, subject, message, failOnError } = parsed.data;
 
-    const variables = buildTemplateVariables(ctx, await resolveNotificationTimeZone());
+    const variables = buildTemplateVariables(
+      ctx,
+      await resolveNotificationTimeZone(),
+      await runUrl(ctx.stepExecution.executionId)
+    );
     const missing = new Set<string>();
     const rendered = {
       subject: renderTemplate(subject, variables, missing),
@@ -77,12 +81,16 @@ export const dhis2Notify: StepHandler = {
 
 registerHandler(Handlers.DHIS2_NOTIFY, dhis2Notify);
 
-function buildTemplateVariables(ctx: StepContext, timeZone: string): Record<string, unknown> {
+function buildTemplateVariables(
+  ctx: StepContext,
+  timeZone: string,
+  link: string
+): Record<string, unknown> {
   return {
     pipelineName: ctx.pipelineName,
     stepName: ctx.step.name,
     executionId: ctx.stepExecution.executionId,
-    runUrl: runUrl(ctx.stepExecution.executionId),
+    runUrl: link,
     date: formatNotificationDate(new Date(), timeZone),
     input: ctx.input,
   };

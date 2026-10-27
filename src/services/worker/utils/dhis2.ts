@@ -534,3 +534,22 @@ export async function getDhis2ServerTimeZone(): Promise<string | undefined> {
   }
   return serverTimeZone;
 }
+
+let contextPath: string | undefined;
+
+/**
+ * GET /system/info → contextPath, DHIS2's public URL (`server.base.url`), cached like the time zone.
+ * DHIS2_BASE_URL can be an internal address that message recipients can't open.
+ */
+export async function getDhis2ContextPath(): Promise<string | undefined> {
+  if (contextPath) return contextPath;
+  try {
+    const response = await dhis2RestClient.get<{ contextPath?: string }>("/system/info", {
+      params: { fields: "contextPath" },
+    });
+    contextPath = response.data.contextPath || undefined;
+  } catch {
+    return undefined;
+  }
+  return contextPath;
+}

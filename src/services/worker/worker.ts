@@ -32,7 +32,21 @@ async function startWorker() {
   logger.info("[worker] DB client created");
   const connection = await amqplib.connect(env.RABBITMQ_URL);
   logger.info("[worker] RabbitMQ connection established");
+
+  let shuttingDown = false;
+  connection.on("error", (err) => {
+    logger.error("[worker] RabbitMQ connection error:", err);
+  });
+  connection.on("close", () => {
+    if (shuttingDown) return;
+    logger.error("[worker] RabbitMQ connection closed unexpectedly — exiting");
+    process.exit(1);
+  });
+
   const channel = await connection.createChannel();
+  channel.on("error", (err) => {
+    logger.error("[worker] RabbitMQ channel error:", err);
+  });
 
   //Declares all queues and exchanges
   await setupTopology(channel);
@@ -133,6 +147,7 @@ async function startWorker() {
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   process.on("SIGTERM", async () => {
     logger.info("[worker] SIGTERM received — beginning graceful shutdown");
+    shuttingDown = true;
     await outboxPublisher.stop();
     await channel.close();
     await connection.close();
