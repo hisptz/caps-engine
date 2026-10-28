@@ -67,12 +67,20 @@ export async function runPredictionSetup(
 }
 
 /**
- * GET /jobs/{job_id}
- * Returns the current status string of a job.
+ * The status in a GET /v1/jobs/{job_id} response. CHAP up to 2.5 answers the bare status
+ * string; later versions answer the whole JobDescription, with the status in `status`.
+ */
+export function jobStatusFromResponse(data: string | JobDescription): string {
+  return typeof data === "string" ? data : data.status;
+}
+
+/**
+ * GET /v1/jobs/{job_id}
+ * Returns the current status string of a job, from either response shape.
  */
 export async function getJobStatus(jobId: string): Promise<string> {
-  const response = await chapClient.get<string>(`v1/jobs/${jobId}`);
-  return response.data;
+  const response = await chapClient.get<string | JobDescription>(`v1/jobs/${jobId}`);
+  return jobStatusFromResponse(response.data);
 }
 
 /**
