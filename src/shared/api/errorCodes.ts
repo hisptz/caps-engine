@@ -7,6 +7,13 @@ export const ApiErrorCode = {
   PIPELINE_DUPLICATE_NAME: "pipeline_duplicate_name",
   PIPELINE_HAS_ACTIVE_EXECUTIONS: "pipeline_has_active_executions",
   PIPELINE_TRIGGER_SKIPPED: "pipeline_trigger_skipped",
+  PIPELINE_HAS_INCOMING_CONNECTORS: "pipeline_has_incoming_connectors",
+
+  CONNECTOR_NOT_FOUND: "connector_not_found",
+  CONNECTOR_CREATES_CYCLE: "connector_creates_cycle",
+  CONNECTOR_RULE_INVALID: "connector_rule_invalid",
+  CONNECTOR_RUN_NOT_FOUND: "connector_run_not_found",
+  CONNECTOR_RUN_INVALID_STATE: "connector_run_invalid_state",
 
   STEP_NOT_FOUND: "step_not_found",
   STEP_ORDER_TAKEN: "step_order_taken",

@@ -66,3 +66,18 @@ enum OutboxDeliveryStatus {
   PUBLISHED
   FAILED
 }
+
+enum ConnectorTriggerOn {
+  COMPLETED
+  FAILED
+  FINISHED
+}
+
+enum ConnectorRunStatus {
+  WAITING
+  FIRED
+  NOT_MET
+  SKIPPED
+  FAILED
+  CANCELLED
+}

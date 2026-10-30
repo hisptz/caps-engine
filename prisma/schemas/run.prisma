@@ -18,8 +18,11 @@ model PipelineExecution {
   // Cursor: which step are we currently on
   currentStepIndex Int @default(0)
 
-  // What triggered this execution (e.g. "schedule", "api", "manual")
+  // What triggered this execution (e.g. "schedule", "api", "manual", "connector")
   triggeredBy String?
+
+  // How many connectors led to this execution (0 = started directly); caps runaway chains
+  chainDepth Int @default(0)
 
   startedAt  DateTime?
   finishedAt DateTime?
@@ -31,6 +34,10 @@ model PipelineExecution {
   stepExecutions StepExecution[]
   retryCommands  StepRetryCommand[]
   logs           ExecutionLog[]
+
+  // Connector runs this execution created when it finished, and the one that started it
+  outgoingConnectorRuns ConnectorRun[] @relation("ConnectorRunSource")
+  incomingConnectorRun  ConnectorRun?  @relation("ConnectorRunTarget")
 
   @@index([pipelineId])
   @@index([scheduleId])

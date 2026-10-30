@@ -12,6 +12,7 @@ import { rateLimiter } from "@/services/api/plugins/rate-limiter.ts";
 import { errorHandler } from "@/shared/api/errors.ts";
 import { pipelinesModule } from "@/services/api/modules/pipelines/index.ts";
 import { schedulesModule } from "@/services/api/modules/schedules/index.ts";
+import { connectorsModule } from "@/services/api/modules/connectors/index.ts";
 import { climateModule } from "@/services/api/modules/climate/index.ts";
 import { monitoringModule } from "@/services/api/modules/monitoring/index.ts";
 import { handlersModule } from "@/services/api/modules/handlers/index.ts";
@@ -49,6 +50,7 @@ const app = new Elysia()
   .onError(errorHandler)
   .use(pipelinesModule)
   .use(schedulesModule)
+  .use(connectorsModule)
   .use(climateModule)
   .use(monitoringModule)
   .use(handlersModule)

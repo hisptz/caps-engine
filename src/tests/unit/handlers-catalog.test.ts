@@ -61,6 +61,24 @@ describe("handler catalog", () => {
     expect(d?.schemas?.context).toBeDefined();
   });
 
+  it("describes every handler's result for connector conditions", () => {
+    for (const descriptor of listHandlerDescriptors()) {
+      const { outputs } = descriptor;
+      if ("passThrough" in outputs) {
+        continue;
+      }
+      const keys = outputs.fields.map((field) => field.key);
+      expect(new Set(keys).size, `${descriptor.key} has duplicate output keys`).toBe(keys.length);
+      for (const field of outputs.fields) {
+        expect(field.type, `${descriptor.key}.${field.key}`).toBe("number");
+      }
+    }
+    expect(getHandlerDescriptor("dhis2-notify")?.outputs).toEqual({ passThrough: true });
+    expect(getHandlerDescriptor("alert-generation")?.outputs).toEqual({
+      fields: [{ key: "count", label: "Alerts raised", type: "number" }],
+    });
+  });
+
   it("isKnownHandlerKey accepts registry keys only", () => {
     expect(isKnownHandlerKey("climate-openeo-create")).toBe(true);
     expect(isKnownHandlerKey("climate-openeo-poll")).toBe(true);

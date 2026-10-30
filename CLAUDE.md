@@ -73,7 +73,7 @@ Two workers run by default (`worker-1`, `worker-2`) — they are stateless and s
 | `bun run db:seed`     | Seed example pipelines/data            |
 | `bun run db:reset`    | Reset database (dev only, destructive) |
 
-Prisma schemas are split by concern under `prisma/schemas/`: `pipeline.prisma`, `run.prisma`, `log.prisma`, `schedule.prisma`, `enums.prisma`, `schema.prisma`. Generated client is at `prisma/generated/prisma/`.
+Prisma schemas are split by concern under `prisma/schemas/`: `pipeline.prisma`, `run.prisma`, `log.prisma`, `schedule.prisma`, `connector.prisma`, `enums.prisma`, `schema.prisma`. Generated client is at `prisma/generated/prisma/`.
 
 Tests require a running Postgres and read `DATABASE_URL_TEST` from `.env`; the `caps_test` database must exist beforehand (`make db-shell` → `CREATE DATABASE caps_test;`).
 
@@ -117,6 +117,15 @@ The worker service uses RabbitMQ to coordinate pipeline execution, with a transa
 
 Dead-lettered messages go to `caps.dlx` exchange → `caps.dead-letters` queue. `DlxMonitor` (`services/monitor/monitor.ts`) watches this and marks the corresponding execution as `FAILED`. `services/monitor/topology.ts` is the single source of truth for RabbitMQ queue/exchange declarations.
 
+### Pipeline Connectors
+
+A `PipelineConnector` joins two pipelines: when the source execution finishes (`on`: COMPLETED, FAILED or FINISHED), the connector may start the target pipeline. The source is already finished by then; the decision lives on a `ConnectorRun` (WAITING → FIRED / NOT_MET / SKIPPED / FAILED / CANCELLED), so a connector never keeps its source looking active.
+
+1. **Every** COMPLETED/FAILED transition goes through `finishExecution()` (`src/shared/pipeline/finishExecution.ts`). In the same transaction it creates one `ConnectorRun` per matching active connector (unique per connector and source execution) and queues `pipeline.connectors` through the outbox, delayed by `delayMinutes`. Writing the status directly skips the connectors.
+2. `ConnectorEvaluator` (`services/runners/connector.ts`) consumes `pipeline.connectors`. It evaluates the connector's `condition` — a closed JSONLogic subset (`src/shared/pipeline/rules.ts`) over `{ context, status }` of the source execution — and, when met, starts the target via `startExecution()` (`src/shared/pipeline/startExecution.ts`, which `TriggerService` also uses) in the same transaction that marks the run FIRED. The target's concurrency policy still applies (a refusal ends the run SKIPPED). `inputMapping` copies source context paths into the target's context.
+   Rules reference step results by step id (`context.stepOutputs.<stepId>.<field>`, written by `withStepOutput()` in `src/shared/pipeline/stepOutputs.ts` alongside the positional `step_<n>_output`), so reordering steps does not change what a rule checks. Each handler declares its result fields in `HANDLERS` (`outputs`), which `GET /handlers` returns for the app's condition picker; keep them in step with what `execute` returns.
+3. Guardrails: the API rejects connectors that would close a loop; executions carry `chainDepth` and connectors stop at `MAX_CONNECTOR_CHAIN_DEPTH`; a pipeline that other pipelines' connectors start cannot be deleted.
+
 ### Scheduler
 
 `src/services/scheduler/` loads active cron-only `PipelineSchedule` rows into an in-memory [Croner](https://github.com/hexagon/croner) job map (one job per schedule id), firing with each schedule's `inputContext` attached via Croner's `context` option. Postgres `LISTEN/NOTIFY` on `caps_schedule_events` (`schedule-events.ts`) keeps the map in sync when schedules are created/paused/updated/deleted or a pipeline is deactivated. Missed ticks during downtime are **not** replayed. Triggered executions go through the same durable outbox described above and still respect each pipeline's `concurrencyPolicy`. Cron expressions are 5-part, evaluated in the host server's IANA timezone.
@@ -137,30 +146,34 @@ Current handlers (see `Handlers` enum): climate dataset freshness (`open-climate
 
 ### Key Files
 
-| File                                               | Purpose                                                               |
-| -------------------------------------------------- | --------------------------------------------------------------------- |
-| `src/services/worker/worker.ts`                    | Worker entry point: initializes RabbitMQ topology, wires up consumers |
-| `src/services/scheduler/index.ts`                  | Scheduler entry point                                                 |
-| `src/services/api/index.ts`                        | API entry point (Burger API)                                          |
-| `src/services/worker/services/runners/pipeline.ts` | `PipelineCoordinator` — main orchestrator                             |
-| `src/services/worker/services/runners/step.ts`     | `StepRunner` — inline step execution                                  |
-| `src/services/worker/services/workers/step.ts`     | `StepWorker` — queued step execution                                  |
-| `src/services/worker/services/outbox/publisher.ts` | `OutboxPublisher` — transactional outbox delivery                     |
-| `src/services/worker/constants/handlers.ts`        | `Handlers` enum and `HANDLERS` registry                               |
-| `src/services/worker/types/service.ts`             | `StepHandler`/`StepContext` types                                     |
-| `src/services/worker/services/monitor/topology.ts` | RabbitMQ queue/exchange declarations (single source of truth)         |
-| `src/services/worker/services/monitor/monitor.ts`  | Dead-letter queue monitor                                             |
-| `src/services/scheduler/scheduler.ts`              | Croner job map management                                             |
-| `src/services/scheduler/schedule-events.ts`        | Postgres LISTEN/NOTIFY sync for schedule changes                      |
-| `src/shared/pipeline/outbox.ts`                    | Outbox write helpers (used inside triggering transactions)            |
-| `src/shared/handlers/catalog.ts`                   | Zod → JSON Schema handler catalog for the API                         |
-| `src/shared/clients/db.ts`                         | Prisma client factory                                                 |
+| File                                                | Purpose                                                                   |
+| --------------------------------------------------- | ------------------------------------------------------------------------- |
+| `src/services/worker/worker.ts`                     | Worker entry point: initializes RabbitMQ topology, wires up consumers     |
+| `src/services/scheduler/index.ts`                   | Scheduler entry point                                                     |
+| `src/services/api/index.ts`                         | API entry point (Burger API)                                              |
+| `src/services/worker/services/runners/pipeline.ts`  | `PipelineCoordinator` — main orchestrator                                 |
+| `src/services/worker/services/runners/step.ts`      | `StepRunner` — inline step execution                                      |
+| `src/services/worker/services/workers/step.ts`      | `StepWorker` — queued step execution                                      |
+| `src/services/worker/services/outbox/publisher.ts`  | `OutboxPublisher` — transactional outbox delivery                         |
+| `src/services/worker/constants/handlers.ts`         | `Handlers` enum and `HANDLERS` registry                                   |
+| `src/services/worker/types/service.ts`              | `StepHandler`/`StepContext` types                                         |
+| `src/services/worker/services/monitor/topology.ts`  | RabbitMQ queue/exchange declarations (single source of truth)             |
+| `src/services/worker/services/monitor/monitor.ts`   | Dead-letter queue monitor                                                 |
+| `src/services/scheduler/scheduler.ts`               | Croner job map management                                                 |
+| `src/services/scheduler/schedule-events.ts`         | Postgres LISTEN/NOTIFY sync for schedule changes                          |
+| `src/shared/pipeline/outbox.ts`                     | Outbox write helpers (used inside triggering transactions)                |
+| `src/shared/handlers/catalog.ts`                    | Zod → JSON Schema handler catalog for the API                             |
+| `src/shared/pipeline/finishExecution.ts`            | Ends an execution and creates its connector runs (the only way to finish) |
+| `src/services/worker/services/runners/connector.ts` | `ConnectorEvaluator` — decides connector runs and starts target pipelines |
+| `src/shared/clients/db.ts`                          | Prisma client factory                                                     |
 
 ### Database Schema Overview
 
-**Definition models** (blueprints): `Pipeline`, `PipelineStep`, `PipelineSchedule` — immutable config.
+**Definition models** (blueprints): `Pipeline`, `PipelineStep`, `PipelineSchedule`, `PipelineConnector` — immutable config.
 
 **Execution models** (runtime state): `PipelineExecution` (status machine: PENDING → RUNNING → AWAITING_STEP → COMPLETED/FAILED), `StepExecution`, `TaskExecution`, `StepRetryCommand` — mutable, cursor-driven.
+
+**Connector runs**: `ConnectorRun` — one decision per connector per finished source execution.
 
 **Delivery**: `OutboxMessage` — transactional outbox rows for reliable RabbitMQ publishing.
 

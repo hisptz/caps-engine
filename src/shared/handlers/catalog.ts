@@ -1,4 +1,8 @@
-import { HANDLERS, type Handlers } from "@/services/worker/constants/handlers.ts";
+import {
+  HANDLERS,
+  type HandlerOutputs,
+  type Handlers,
+} from "@/services/worker/constants/handlers.ts";
 import type { ZodType } from "zod";
 import { z } from "zod";
 
@@ -15,6 +19,8 @@ export type HandlerDescriptor = {
     config?: HandlerJsonSchema;
     context?: HandlerJsonSchema;
   };
+  /** Fields of the step's result (`step_<n>_output.<key>`), for connector conditions */
+  outputs: HandlerOutputs;
 };
 
 const JSON_SCHEMA_TARGET = "draft-2020-12" as const;
@@ -58,6 +64,7 @@ export function listHandlerDescriptors(): HandlerDescriptor[] {
       description: entry.description,
       tags: entry.tags,
       queueName: entry.queueName,
+      outputs: entry.outputs,
       ...(Object.keys(schemas).length > 0 ? { schemas } : {}),
     });
   }

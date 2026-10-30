@@ -19,6 +19,9 @@ import { setupTopology } from "@/services/worker/services/monitor/topology.ts";
 import { DlxMonitor } from "@/services/worker/services/monitor/monitor.ts";
 import { STEP_QUEUES } from "@/services/worker/constants/handlers.ts";
 import { OutboxPublisher } from "@/services/worker/services/outbox/publisher.ts";
+import { ConnectorEvaluator } from "@/services/worker/services/runners/connector.ts";
+import { QUEUES } from "@/services/worker/constants/monitor.ts";
+import type { ConnectorJobMessage } from "@/shared/pipeline/finishExecution.ts";
 
 // ============================================================
 // Queue names for step-specific workers (from the handler registry)
@@ -57,6 +60,7 @@ async function startWorker() {
   const stepRunner = new StepRunner({ prisma });
   const coordinator = new PipelineCoordinator({ prisma, channel, stepRunner });
   const stepWorker = new StepWorker({ prisma, channel });
+  const connectorEvaluator = new ConnectorEvaluator({ prisma });
   const dlxMonitor = new DlxMonitor(prisma, channel);
   const outboxPublisher = new OutboxPublisher(prisma, connection);
 
@@ -109,7 +113,30 @@ async function startWorker() {
   });
 
   // --------------------------------------------------------
-  // Consumer 3: step-specific queue workers
+  // Consumer 3: pipeline connectors
+  // Woken when a finished execution's connector run is due
+  // --------------------------------------------------------
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
+  await channel.consume(QUEUES.PIPELINE_CONNECTORS, async (msg) => {
+    if (!msg) return;
+    let connectorRunId: string | undefined;
+    try {
+      ({ connectorRunId } = JSON.parse(msg.content.toString()) as ConnectorJobMessage);
+      logger.info(`[worker] [connectors] Message received connectorRunId=${connectorRunId}`);
+      await connectorEvaluator.handle(connectorRunId);
+      logger.info(`[worker] [connectors] Ack connectorRunId=${connectorRunId}`);
+      channel.ack(msg);
+    } catch (err) {
+      logger.error("[connectors] Unhandled error:", err);
+      logger.warn(
+        `[worker] [connectors] Nack (no requeue) connectorRunId=${connectorRunId ?? "unknown"}`
+      );
+      channel.nack(msg, false, false);
+    }
+  });
+
+  // --------------------------------------------------------
+  // Consumer 4: step-specific queue workers
   // Each step queue can be consumed by a dedicated worker pool
   // in a separate process — this wires them up in a single
   // process for simplicity, but they can be split out
@@ -143,6 +170,7 @@ async function startWorker() {
 
   logger.info(`Listening on: ${PIPELINE_QUEUE}`);
   logger.info(`Listening on: ${STEP_RESULTS_QUEUE}`);
+  logger.info(`Listening on: ${QUEUES.PIPELINE_CONNECTORS}`);
 
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   process.on("SIGTERM", async () => {

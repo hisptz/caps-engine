@@ -1,6 +1,10 @@
 import { Prisma } from "@db/client";
 import { apiDb } from "@/services/api/utils/db.ts";
-import { PipelineQueries, ActiveExecutionError } from "@/services/api/utils/pipeline/queries.ts";
+import {
+  PipelineQueries,
+  ActiveExecutionError,
+  IncomingConnectorsError,
+} from "@/services/api/utils/pipeline/queries.ts";
 import { validateStepHandlerInput } from "@/services/api/utils/pipeline/stepValidation.ts";
 import { validatePipelineInputContext } from "@/services/api/utils/pipeline/inputContextValidation.ts";
 import { ApiError, conflict, notFound } from "@/shared/api/errors.ts";
@@ -82,6 +86,11 @@ export class PipelineService {
     } catch (err) {
       if (err instanceof ActiveExecutionError) {
         throw conflict(err.message, ApiErrorCode.PIPELINE_HAS_ACTIVE_EXECUTIONS);
+      }
+      if (err instanceof IncomingConnectorsError) {
+        throw conflict(err.message, ApiErrorCode.PIPELINE_HAS_INCOMING_CONNECTORS, {
+          connectors: err.connectors,
+        });
       }
       if (isPrismaNotFound(err)) {
         throw notFound("Pipeline not found", ApiErrorCode.PIPELINE_NOT_FOUND);

@@ -1,0 +1,75 @@
+// ============================================================
+// CONNECTOR CLUSTER
+// Joints between pipelines: when one pipeline finishes, a connector
+// decides (by rule, optionally after a delay) whether to start another.
+// The source execution is finished by then; a connector run carries the wait.
+// ============================================================
+
+model PipelineConnector {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+
+  sourcePipelineId String @db.Uuid
+  targetPipelineId String @db.Uuid
+
+  // Which source outcome creates a connector run
+  on ConnectorTriggerOn @default(COMPLETED)
+
+  // JSONLogic rule evaluated against { context, status } of the source execution; null = always
+  condition Json?
+
+  // Target context key -> dot path into the source execution's context
+  inputMapping Json @default("{}")
+
+  // Minutes to wait after the source finishes before evaluating the rule
+  delayMinutes Int @default(0)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sourcePipeline Pipeline  @relation("ConnectorSource", fields: [sourcePipelineId], references: [id], onDelete: Cascade)
+  // Restrict: a pipeline another pipeline's connector starts cannot be deleted until the connector is removed
+  targetPipeline Pipeline  @relation("ConnectorTarget", fields: [targetPipelineId], references: [id], onDelete: Restrict)
+  runs           ConnectorRun[]
+
+  @@index([sourcePipelineId])
+  @@index([targetPipelineId])
+  @@map("pipeline_connectors")
+}
+
+model ConnectorRun {
+  id     String @id @default(uuid()) @db.Uuid
+  connectorId String @db.Uuid
+
+  sourceExecutionId String  @db.Uuid
+  // Set once the connector fires; the execution it started
+  targetExecutionId String? @unique @db.Uuid
+
+  status ConnectorRunStatus @default(WAITING)
+
+  // The source execution's final status that created this run
+  sourceStatus PipelineExecutionStatus
+
+  // When the rule is (next) evaluated
+  checkAt     DateTime  @default(now())
+  evaluatedAt DateTime?
+
+  // Why the run ended where it did (rule not met, target skipped, chain too deep, …)
+  reason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  connector            PipelineConnector       @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  sourceExecution PipelineExecution  @relation("ConnectorRunSource", fields: [sourceExecutionId], references: [id], onDelete: Cascade)
+  targetExecution PipelineExecution? @relation("ConnectorRunTarget", fields: [targetExecutionId], references: [id], onDelete: SetNull)
+
+  // A connector fires at most once per source execution
+  @@unique([connectorId, sourceExecutionId])
+  @@index([status, checkAt])
+  @@index([sourceExecutionId])
+  @@map("connector_runs")
+}

@@ -72,12 +72,13 @@ export const pipelinesModule = new Elysia({ prefix: "/pipelines", tags: ["Pipeli
     params: idParams,
     detail: {
       summary: "Delete pipeline",
-      description: "Delete a pipeline definition. Fails if active executions exist.",
+      description:
+        "Delete a pipeline definition. Fails if active executions exist or connectors from other pipelines start it.",
       operationId: "deletePipeline",
       responses: {
         "200": { description: "Deleted pipeline" },
         "404": { description: "Pipeline not found" },
-        "409": { description: "Pipeline has active executions" },
+        "409": { description: "Pipeline has active executions or incoming connectors" },
       },
     },
   })

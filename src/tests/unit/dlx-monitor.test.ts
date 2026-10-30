@@ -22,10 +22,17 @@ type MockPrisma = {
   executionLog: {
     create: ReturnType<typeof vi.fn>;
   };
+  pipelineConnector: {
+    findMany: ReturnType<typeof vi.fn>;
+  };
+  connectorRun: {
+    updateMany: ReturnType<typeof vi.fn>;
+  };
+  $transaction: ReturnType<typeof vi.fn>;
 };
 
 function buildMockPrisma(): MockPrisma {
-  return {
+  const prisma = {
     pipelineExecution: {
       findUnique: vi.fn(),
       update: vi.fn().mockResolvedValue({}),
@@ -33,7 +40,16 @@ function buildMockPrisma(): MockPrisma {
     executionLog: {
       create: vi.fn().mockResolvedValue({}),
     },
+    pipelineConnector: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    connectorRun: {
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    $transaction: vi.fn(),
   };
+  prisma.$transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(prisma));
+  return prisma;
 }
 
 function buildMockChannel() {
@@ -122,6 +138,19 @@ beforeEach(async () => {
 // ============================================================
 
 describe("DlxMonitor — dead message handling", () => {
+  it("marks a WAITING connector run FAILED when its connector message is dead-lettered", async () => {
+    await capturedConsumeHandler!(buildDeadMessage({ connectorRunId: "connector-run-1" }));
+
+    expect(mockPrisma.connectorRun.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "connector-run-1", status: "WAITING" },
+        data: expect.objectContaining({ status: "FAILED" }),
+      })
+    );
+    expect(mockPrisma.pipelineExecution.update).not.toHaveBeenCalled();
+    expect(mockChannel.ack).toHaveBeenCalled();
+  });
+
   it("marks execution FAILED when dead message arrives and execution is in RUNNING state", async () => {
     const executionId = "exec-running-123";
     mockPrisma.pipelineExecution.findUnique.mockResolvedValue({

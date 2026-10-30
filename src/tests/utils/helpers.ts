@@ -149,6 +149,7 @@ export function buildMockExecution(overrides?: Partial<PipelineExecution>): Pipe
     context: {},
     currentStepIndex: 0,
     triggeredBy: null,
+    chainDepth: 0,
     startedAt: null,
     finishedAt: null,
     createdAt: new Date(),
@@ -279,6 +280,9 @@ export async function clearExecutionData(prisma: PrismaClient): Promise<void> {
   await prisma.stepRetryCommand.deleteMany();
   await prisma.stepExecution.deleteMany();
   await prisma.outboxMessage.deleteMany();
+  // Connectors restrict deleting their target pipeline, so they go first
+  await prisma.connectorRun.deleteMany();
+  await prisma.pipelineConnector.deleteMany();
   await prisma.pipelineExecution.deleteMany();
   await prisma.pipelineSchedule.deleteMany();
   await prisma.pipelineStep.deleteMany();

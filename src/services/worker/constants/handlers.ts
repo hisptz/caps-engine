@@ -30,11 +30,22 @@ import {
 import { dhis2NotifyConfigSchema } from "@/services/worker/services/handlers/dhis2Notify/schemas/config.ts";
 import type { ZodType } from "zod";
 
+export type HandlerOutputField = {
+  key: string;
+  label: string;
+  type: "number";
+};
+
+/** What a step's result contains: listed fields, or the previous step's result passed through. */
+export type HandlerOutputs = { fields: HandlerOutputField[] } | { passThrough: true };
+
 export type HandlerRegistryEntry = {
   queueName: string;
   displayName: string;
   description: string;
   tags: string[];
+  /** Kept in step with what `execute` returns; the app offers these in connector conditions */
+  outputs: HandlerOutputs;
   schemas: {
     config?: ZodType;
     context?: ZodType;
@@ -71,6 +82,7 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       displayName: "Open Climate Service Sync",
       description: "Bring Open Climate Service datasets up to date before the pipeline reads them",
       tags: ["climate", "sync"],
+      outputs: { fields: [] },
       schemas: {
         config: openClimateServiceSyncConfigSchema,
       },
@@ -84,6 +96,7 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       description:
         "Create and start an Open Climate Service batch job for climate data aggregation",
       tags: ["climate", "openeo"],
+      outputs: { fields: [] },
       schemas: {
         config: climateOpenEoConfigSchema,
         context: climateOpenEoContextSchema,
@@ -98,6 +111,7 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       displayName: "Open Climate Service Poll",
       description: "Poll an Open Climate Service job until it finishes",
       tags: ["climate", "openeo"],
+      outputs: { fields: [] },
       schemas: {},
     },
   ],
@@ -108,6 +122,9 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       displayName: "Open Climate Service Download",
       description: "Download DHIS2 data values from a finished Open Climate Service job",
       tags: ["climate", "openeo"],
+      outputs: {
+        fields: [{ key: "count", label: "Values downloaded", type: "number" }],
+      },
       schemas: {},
     },
   ],
@@ -118,6 +135,7 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       displayName: "Prediction Trigger",
       description: "Trigger prediction generation",
       tags: ["prediction", "chap"],
+      outputs: { fields: [] },
       schemas: {
         config: predictionTriggerConfigSchema,
         context: predictionTriggerContextSchema,
@@ -133,6 +151,7 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       description:
         "Wait for the CHAP prediction job: checks its status until CHAP reports success or failure",
       tags: ["prediction", "chap"],
+      outputs: { fields: [] },
       schemas: {
         config: predictionPollConfigSchema,
       },
@@ -145,6 +164,9 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       displayName: "Prediction Data Download",
       description: "Download prediction data from CHAP",
       tags: ["prediction", "chap"],
+      outputs: {
+        fields: [{ key: "count", label: "Values downloaded", type: "number" }],
+      },
       schemas: {
         config: predictionDataDownloadConfigSchema,
       },
@@ -158,6 +180,9 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       description:
         "Pulls aggregate data from another DHIS2 instance through a staging route, into a file for DHIS2 Data Upload",
       tags: ["dhis2", "pull"],
+      outputs: {
+        fields: [{ key: "count", label: "Values pulled", type: "number" }],
+      },
       schemas: {
         config: dhis2InstancePullConfigSchema,
         context: dhis2InstancePullContextSchema,
@@ -173,6 +198,7 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       description:
         "Sends data values from staging to another DHIS2 instance through a staging route",
       tags: ["dhis2", "push"],
+      outputs: { fields: [] },
       schemas: {
         config: dhis2InstancePushConfigSchema,
         context: dhis2InstancePushContextSchema,
@@ -187,6 +213,13 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       displayName: "DHIS2 Data Upload",
       description: "Uploads data from a file to DHIS2",
       tags: ["dhis2"],
+      outputs: {
+        fields: [
+          { key: "imported", label: "Values imported", type: "number" },
+          { key: "updated", label: "Values updated", type: "number" },
+          { key: "ignored", label: "Values ignored", type: "number" },
+        ],
+      },
       schemas: {
         config: dhis2DataUploadConfigSchema,
       },
@@ -199,6 +232,7 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       displayName: "DHIS2 Analytics Run",
       description: "Triggers DHIS2 analytics table generation and polls for completion",
       tags: ["dhis2", "analytics"],
+      outputs: { fields: [] },
       schemas: {
         config: dhis2AnalyticsRunConfigSchema,
       },
@@ -211,6 +245,9 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       displayName: "Threshold Generation",
       description: "Generates thresholds for Malaria Alerts",
       tags: ["threshold"],
+      outputs: {
+        fields: [{ key: "count", label: "Thresholds generated", type: "number" }],
+      },
       schemas: {
         config: thresholdGenerationConfigSchema,
         context: thresholdGenerationContextSchema,
@@ -225,6 +262,9 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       description:
         "Compares aggregate values against thresholds and generates DHIS2 tracker events",
       tags: ["alert", "dhis2"],
+      outputs: {
+        fields: [{ key: "count", label: "Alerts raised", type: "number" }],
+      },
       schemas: {
         config: alertGenerationConfigSchema,
         context: alertGenerationContextSchema,
@@ -238,6 +278,9 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       displayName: "Event Data Upload",
       description: "Uploads tracker events from a file to DHIS2",
       tags: ["dhis2", "alert"],
+      outputs: {
+        fields: [{ key: "created", label: "Events created", type: "number" }],
+      },
       schemas: {},
     },
   ],
@@ -249,6 +292,7 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       description:
         "Sends a DHIS2 message (and email, when SMTP is configured) to users or user groups",
       tags: ["dhis2", "notification"],
+      outputs: { passThrough: true },
       schemas: {
         config: dhis2NotifyConfigSchema,
       },

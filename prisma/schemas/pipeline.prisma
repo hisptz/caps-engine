@@ -19,6 +19,9 @@ model Pipeline {
   executions PipelineExecution[]
   schedules  PipelineSchedule[]
 
+  outgoingConnectors PipelineConnector[] @relation("ConnectorSource")
+  incomingConnectors PipelineConnector[] @relation("ConnectorTarget")
+
   @@map("pipelines")
 }
 

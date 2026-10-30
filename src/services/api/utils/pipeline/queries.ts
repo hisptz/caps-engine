@@ -103,6 +103,18 @@ export class PipelineQueries {
         );
       }
 
+      // Connectors from other pipelines would lose their target; the user removes them first
+      const incomingConnectors = await tx.pipelineConnector.findMany({
+        where: { targetPipelineId: id, sourcePipelineId: { not: id } },
+        select: { id: true, name: true, sourcePipeline: { select: { id: true, name: true } } },
+      });
+      if (incomingConnectors.length > 0) {
+        throw new IncomingConnectorsError(
+          `Cannot delete pipeline: ${incomingConnectors.length} connector(s) from other pipelines start it`,
+          incomingConnectors
+        );
+      }
+
       return tx.pipeline.delete({ where: { id } });
     });
   }
@@ -265,5 +277,19 @@ export class ActiveExecutionError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ActiveExecutionError";
+  }
+}
+
+export class IncomingConnectorsError extends Error {
+  constructor(
+    message: string,
+    readonly connectors: {
+      id: string;
+      name: string;
+      sourcePipeline: { id: string; name: string };
+    }[]
+  ) {
+    super(message);
+    this.name = "IncomingConnectorsError";
   }
 }

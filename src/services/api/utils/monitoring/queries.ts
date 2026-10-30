@@ -1,4 +1,10 @@
-import { PipelineExecutionStatus, Prisma, PrismaClient, StepExecutionStatus } from "@db/client";
+import {
+  ConnectorRunStatus,
+  PipelineExecutionStatus,
+  Prisma,
+  PrismaClient,
+  StepExecutionStatus,
+} from "@db/client";
 import {
   ACTIVE_STEP_STATUSES,
   evaluateStepRetryEligibility,
@@ -43,6 +49,29 @@ export class MonitoringQueries {
         logs: {
           orderBy: { loggedAt: "asc" },
           take: 500, // Cap for very chatty pipelines
+        },
+        // The connector that started this execution, if any
+        incomingConnectorRun: {
+          include: {
+            connector: { select: { id: true, name: true } },
+            sourceExecution: {
+              select: { id: true, status: true, pipeline: { select: { id: true, name: true } } },
+            },
+          },
+        },
+        // What this execution's connectors decided when it finished
+        outgoingConnectorRuns: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            connector: {
+              select: {
+                id: true,
+                name: true,
+                targetPipeline: { select: { id: true, name: true } },
+              },
+            },
+            targetExecution: { select: { id: true, status: true } },
+          },
         },
       },
     });
@@ -140,49 +169,71 @@ export class MonitoringQueries {
 
   /** Current system health snapshot */
   async getDashboardSummary() {
-    const [statusCounts, stuckExecutions, recentFailures] = await Promise.all([
-      // Count executions by status
-      this.prisma.pipelineExecution.groupBy({
-        by: ["status"],
-        _count: { id: true },
-        where: {
-          createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, // last 24h
-        },
-      }),
+    const [statusCounts, stuckExecutions, recentFailures, overdueConnectorRuns] = await Promise.all(
+      [
+        // Count executions by status
+        this.prisma.pipelineExecution.groupBy({
+          by: ["status"],
+          _count: { id: true },
+          where: {
+            createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, // last 24h
+          },
+        }),
 
-      // Pipelines stuck in AWAITING_STEP for more than 10 minutes. A step that is waiting
-      // (e.g. on a CHAP job) updates its attempt on every check, so it is not stuck.
-      this.prisma.pipelineExecution.findMany({
-        where: {
-          status: PipelineExecutionStatus.AWAITING_STEP,
-          updatedAt: { lte: new Date(Date.now() - 10 * 60 * 1000) },
-          stepExecutions: {
-            none: {
-              status: StepExecutionStatus.RUNNING,
-              updatedAt: { gt: new Date(Date.now() - 10 * 60 * 1000) },
+        // Pipelines stuck in AWAITING_STEP for more than 10 minutes. A step that is waiting
+        // (e.g. on a CHAP job) updates its attempt on every check, so it is not stuck.
+        this.prisma.pipelineExecution.findMany({
+          where: {
+            status: PipelineExecutionStatus.AWAITING_STEP,
+            updatedAt: { lte: new Date(Date.now() - 10 * 60 * 1000) },
+            stepExecutions: {
+              none: {
+                status: StepExecutionStatus.RUNNING,
+                updatedAt: { gt: new Date(Date.now() - 10 * 60 * 1000) },
+              },
             },
           },
-        },
-        include: { pipeline: { select: { name: true } } },
-        orderBy: { updatedAt: "asc" },
-      }),
+          include: { pipeline: { select: { name: true } } },
+          orderBy: { updatedAt: "asc" },
+        }),
 
-      // Most recently failed executions
-      this.prisma.pipelineExecution.findMany({
-        where: { status: PipelineExecutionStatus.FAILED },
-        orderBy: { finishedAt: "desc" },
-        take: 10,
-        include: {
-          pipeline: { select: { name: true } },
-          stepExecutions: {
-            where: { status: "FAILED" },
-            orderBy: { createdAt: "desc" },
-            take: 1,
-            include: { step: { select: { name: true } } },
+        // Most recently failed executions
+        this.prisma.pipelineExecution.findMany({
+          where: { status: PipelineExecutionStatus.FAILED },
+          orderBy: { finishedAt: "desc" },
+          take: 10,
+          include: {
+            pipeline: { select: { name: true } },
+            stepExecutions: {
+              where: { status: "FAILED" },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              include: { step: { select: { name: true } } },
+            },
           },
-        },
-      }),
-    ]);
+        }),
+
+        // Connector runs whose evaluation is more than 10 minutes late (worker down or message lost)
+        this.prisma.connectorRun.findMany({
+          where: {
+            status: ConnectorRunStatus.WAITING,
+            checkAt: { lte: new Date(Date.now() - 10 * 60 * 1000) },
+          },
+          include: {
+            connector: {
+              select: {
+                id: true,
+                name: true,
+                sourcePipeline: { select: { name: true } },
+                targetPipeline: { select: { name: true } },
+              },
+            },
+          },
+          orderBy: { checkAt: "asc" },
+          take: 50,
+        }),
+      ]
+    );
 
     const counts = Object.fromEntries(statusCounts.map((r) => [r.status, r._count.id]));
 
@@ -196,6 +247,7 @@ export class MonitoringQueries {
       },
       stuckExecutions,
       recentFailures,
+      overdueConnectorRuns,
     };
   }
 
