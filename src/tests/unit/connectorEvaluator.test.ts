@@ -7,6 +7,7 @@ const CONNECTOR_RUN_ID = "run-1";
 const SOURCE_EXECUTION_ID = "source-exec";
 const TARGET_PIPELINE_ID = "target-pipe";
 const TARGET_EXECUTION_ID = "target-exec";
+const OTHERWISE_PIPELINE_ID = "otherwise-pipe";
 
 type RunOverrides = {
   status?: ConnectorRunStatus;
@@ -14,6 +15,7 @@ type RunOverrides = {
   isActive?: boolean;
   chainDepth?: number;
   inputMapping?: Record<string, string>;
+  otherwisePipelineId?: string;
 };
 
 function buildRun(overrides: RunOverrides = {}) {
@@ -29,6 +31,7 @@ function buildRun(overrides: RunOverrides = {}) {
       condition: overrides.condition ?? null,
       inputMapping: overrides.inputMapping ?? { count: "step_0_output.count" },
       targetPipelineId: TARGET_PIPELINE_ID,
+      otherwisePipelineId: overrides.otherwisePipelineId ?? null,
     },
     sourceExecution: {
       id: SOURCE_EXECUTION_ID,
@@ -83,7 +86,11 @@ describe("ConnectorEvaluator", () => {
 
     expect(prisma.connectorRun.updateMany).toHaveBeenCalledWith({
       where: { id: CONNECTOR_RUN_ID, status: ConnectorRunStatus.WAITING },
-      data: { status: ConnectorRunStatus.FIRED, evaluatedAt: expect.any(Date) },
+      data: {
+        status: ConnectorRunStatus.FIRED,
+        startedOtherwise: false,
+        evaluatedAt: expect.any(Date),
+      },
     });
     expect(prisma.pipelineExecution.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -111,6 +118,52 @@ describe("ConnectorEvaluator", () => {
       data: expect.objectContaining({ status: ConnectorRunStatus.NOT_MET }),
     });
     expect(prisma.pipelineExecution.create).not.toHaveBeenCalled();
+  });
+
+  it("starts the otherwise pipeline when the rule is false and one is set", async () => {
+    prisma.connectorRun.findUnique.mockResolvedValue(
+      buildRun({
+        condition: { ">": [{ var: "context.step_0_output.count" }, 10] },
+        otherwisePipelineId: OTHERWISE_PIPELINE_ID,
+      })
+    );
+
+    await evaluator.handle(CONNECTOR_RUN_ID);
+
+    expect(prisma.connectorRun.updateMany).toHaveBeenCalledWith({
+      where: { id: CONNECTOR_RUN_ID, status: ConnectorRunStatus.WAITING },
+      data: expect.objectContaining({
+        status: ConnectorRunStatus.FIRED,
+        startedOtherwise: true,
+      }),
+    });
+    expect(prisma.pipeline.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: OTHERWISE_PIPELINE_ID } })
+    );
+    expect(prisma.pipelineExecution.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ pipelineId: OTHERWISE_PIPELINE_ID }),
+    });
+    expect(prisma.executionLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        executionId: SOURCE_EXECUTION_ID,
+        message: expect.stringContaining("rule not met, started the otherwise pipeline"),
+      }),
+    });
+  });
+
+  it("still starts the target, not the otherwise pipeline, when the rule is met", async () => {
+    prisma.connectorRun.findUnique.mockResolvedValue(
+      buildRun({
+        condition: { ">": [{ var: "context.step_0_output.count" }, 0] },
+        otherwisePipelineId: OTHERWISE_PIPELINE_ID,
+      })
+    );
+
+    await evaluator.handle(CONNECTOR_RUN_ID);
+
+    expect(prisma.pipelineExecution.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ pipelineId: TARGET_PIPELINE_ID }),
+    });
   });
 
   it("ends CANCELLED when the connector was deactivated", async () => {

@@ -10,8 +10,10 @@ model PipelineConnector {
   name        String
   description String?
 
-  sourcePipelineId String @db.Uuid
-  targetPipelineId String @db.Uuid
+  sourcePipelineId    String  @db.Uuid
+  targetPipelineId    String  @db.Uuid
+  // Started instead of the target when the rule is not met; null = start nothing
+  otherwisePipelineId String? @db.Uuid
 
   // Which source outcome creates a connector run
   on ConnectorTriggerOn @default(COMPLETED)
@@ -30,18 +32,20 @@ model PipelineConnector {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  sourcePipeline Pipeline  @relation("ConnectorSource", fields: [sourcePipelineId], references: [id], onDelete: Cascade)
+  sourcePipeline    Pipeline       @relation("ConnectorSource", fields: [sourcePipelineId], references: [id], onDelete: Cascade)
   // Restrict: a pipeline another pipeline's connector starts cannot be deleted until the connector is removed
-  targetPipeline Pipeline  @relation("ConnectorTarget", fields: [targetPipelineId], references: [id], onDelete: Restrict)
-  runs           ConnectorRun[]
+  targetPipeline    Pipeline       @relation("ConnectorTarget", fields: [targetPipelineId], references: [id], onDelete: Restrict)
+  otherwisePipeline Pipeline?      @relation("ConnectorOtherwise", fields: [otherwisePipelineId], references: [id], onDelete: Restrict)
+  runs              ConnectorRun[]
 
   @@index([sourcePipelineId])
   @@index([targetPipelineId])
+  @@index([otherwisePipelineId])
   @@map("pipeline_connectors")
 }
 
 model ConnectorRun {
-  id     String @id @default(uuid()) @db.Uuid
+  id          String @id @default(uuid()) @db.Uuid
   connectorId String @db.Uuid
 
   sourceExecutionId String  @db.Uuid
@@ -49,6 +53,9 @@ model ConnectorRun {
   targetExecutionId String? @unique @db.Uuid
 
   status ConnectorRunStatus @default(WAITING)
+
+  // FIRED because the rule was not met, so the connector's otherwise pipeline was started
+  startedOtherwise Boolean @default(false)
 
   // The source execution's final status that created this run
   sourceStatus PipelineExecutionStatus
@@ -63,7 +70,7 @@ model ConnectorRun {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  connector            PipelineConnector       @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  connector       PipelineConnector  @relation(fields: [connectorId], references: [id], onDelete: Cascade)
   sourceExecution PipelineExecution  @relation("ConnectorRunSource", fields: [sourceExecutionId], references: [id], onDelete: Cascade)
   targetExecution PipelineExecution? @relation("ConnectorRunTarget", fields: [targetExecutionId], references: [id], onDelete: SetNull)
 

@@ -80,11 +80,11 @@ model StepExecution {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  execution      PipelineExecution  @relation(fields: [executionId], references: [id], onDelete: Cascade)
-  step           PipelineStep       @relation(fields: [stepId], references: [id], onDelete: Cascade)
-  taskExecutions TaskExecution[]
-  logs           ExecutionLog[]
-  retrySource    StepRetryCommand?  @relation("RetrySourceAttempt")
+  execution        PipelineExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  step             PipelineStep      @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  taskExecutions   TaskExecution[]
+  logs             ExecutionLog[]
+  retrySource      StepRetryCommand? @relation("RetrySourceAttempt")
   retryReplacement StepRetryCommand? @relation("RetryReplacementAttempt")
 
   @@unique([executionId, stepId, attemptNumber])

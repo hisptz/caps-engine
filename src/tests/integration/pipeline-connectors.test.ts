@@ -121,6 +121,46 @@ describe("pipeline connectors", () => {
     ).resolves.toBe(0);
   });
 
+  it("starts the otherwise pipeline when the rule is false", async () => {
+    const { source, target, connector, execution } = await seedConnectedPipelines({
+      condition: { ">": [{ var: "context.step_0_output.count" }, 10] },
+    });
+    const otherwise = await seedPipeline(prisma);
+    await prisma.pipelineConnector.update({
+      where: { id: connector.id },
+      data: { otherwisePipelineId: otherwise.id },
+    });
+
+    const [connectorRunId] = await finish(execution.id, source.id, "COMPLETED");
+    await evaluator.handle(connectorRunId!);
+
+    const run = await prisma.connectorRun.findUniqueOrThrow({ where: { id: connectorRunId } });
+    expect(run.status).toBe(ConnectorRunStatus.FIRED);
+    expect(run.startedOtherwise).toBe(true);
+    const started = await prisma.pipelineExecution.findUniqueOrThrow({
+      where: { id: run.targetExecutionId! },
+    });
+    expect(started.pipelineId).toBe(otherwise.id);
+    await expect(
+      prisma.pipelineExecution.count({ where: { pipelineId: target.id } })
+    ).resolves.toBe(0);
+  });
+
+  it("does not delete a pipeline a connector would start otherwise", async () => {
+    const { connector } = await seedConnectedPipelines({
+      condition: { ">": [{ var: "context.step_0_output.count" }, 10] },
+    });
+    const otherwise = await seedPipeline(prisma);
+    await prisma.pipelineConnector.update({
+      where: { id: connector.id },
+      data: { otherwisePipelineId: otherwise.id },
+    });
+
+    await expect(new PipelineQueries(prisma).deletePipeline(otherwise.id)).rejects.toBeInstanceOf(
+      IncomingConnectorsError
+    );
+  });
+
   it("creates no run when the outcome does not match the connector", async () => {
     const { source, execution } = await seedConnectedPipelines({
       on: ConnectorTriggerOn.COMPLETED,

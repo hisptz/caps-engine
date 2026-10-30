@@ -12,6 +12,7 @@ export const ApiErrorCode = {
   CONNECTOR_NOT_FOUND: "connector_not_found",
   CONNECTOR_CREATES_CYCLE: "connector_creates_cycle",
   CONNECTOR_RULE_INVALID: "connector_rule_invalid",
+  CONNECTOR_OTHERWISE_INVALID: "connector_otherwise_invalid",
   CONNECTOR_RUN_NOT_FOUND: "connector_run_not_found",
   CONNECTOR_RUN_INVALID_STATE: "connector_run_invalid_state",
 

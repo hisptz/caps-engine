@@ -121,6 +121,85 @@ describe("ConnectorService", () => {
     expect(db.pipelineConnector.create).not.toHaveBeenCalled();
   });
 
+  it("creates a connector with an otherwise pipeline behind a rule", async () => {
+    db.pipeline.count.mockResolvedValue(3);
+
+    await service.createConnector(
+      connectorBody({ otherwisePipelineId: C, condition: { ">": [{ var: "context.n" }, 0] } })
+    );
+
+    expect(db.pipeline.count).toHaveBeenCalledWith({ where: { id: { in: [A, B, C] } } });
+    expect(db.pipelineConnector.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ otherwisePipelineId: C }) })
+    );
+  });
+
+  it("rejects an otherwise pipeline without a rule", async () => {
+    await expectApiError(
+      service.createConnector(connectorBody({ otherwisePipelineId: C })),
+      400,
+      ApiErrorCode.CONNECTOR_OTHERWISE_INVALID
+    );
+    expect(db.pipelineConnector.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects an otherwise pipeline that is the target itself", async () => {
+    await expectApiError(
+      service.createConnector(
+        connectorBody({ otherwisePipelineId: B, condition: { ">": [{ var: "context.n" }, 0] } })
+      ),
+      400,
+      ApiErrorCode.CONNECTOR_OTHERWISE_INVALID
+    );
+  });
+
+  it("returns 409 when the otherwise pipeline would close a loop", async () => {
+    db.pipeline.count.mockResolvedValue(3);
+    db.pipelineConnector.findMany.mockResolvedValue([
+      { sourcePipelineId: C, targetPipelineId: A, otherwisePipelineId: null },
+    ]);
+    db.pipeline.findMany.mockResolvedValue([]);
+
+    await expectApiError(
+      service.createConnector(
+        connectorBody({ otherwisePipelineId: C, condition: { ">": [{ var: "context.n" }, 0] } })
+      ),
+      409,
+      ApiErrorCode.CONNECTOR_CREATES_CYCLE
+    );
+  });
+
+  it("counts existing otherwise pipelines when looking for loops", async () => {
+    db.pipelineConnector.findMany.mockResolvedValue([
+      { sourcePipelineId: B, targetPipelineId: C, otherwisePipelineId: A },
+    ]);
+    db.pipeline.findMany.mockResolvedValue([]);
+
+    await expectApiError(
+      service.createConnector(connectorBody()),
+      409,
+      ApiErrorCode.CONNECTOR_CREATES_CYCLE
+    );
+  });
+
+  it("removing the rule of a connector with an otherwise pipeline is rejected", async () => {
+    db.pipelineConnector.findUnique.mockResolvedValue({
+      id: "connector-1",
+      sourcePipelineId: A,
+      targetPipelineId: B,
+      otherwisePipelineId: C,
+      condition: { ">": [{ var: "context.n" }, 0] },
+      isActive: true,
+    });
+
+    await expectApiError(
+      service.updateConnector("connector-1", { condition: null }),
+      400,
+      ApiErrorCode.CONNECTOR_OTHERWISE_INVALID
+    );
+    expect(db.pipelineConnector.update).not.toHaveBeenCalled();
+  });
+
   it("skips the loop check for an inactive connector", async () => {
     db.pipelineConnector.findMany.mockResolvedValue([{ sourcePipelineId: B, targetPipelineId: A }]);
 

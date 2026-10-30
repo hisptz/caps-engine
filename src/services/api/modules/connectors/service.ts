@@ -1,6 +1,6 @@
 import { ConnectorRunStatus, Prisma } from "@db/client";
 import { apiDb } from "@/services/api/utils/db.ts";
-import { conflict, notFound } from "@/shared/api/errors.ts";
+import { badRequest, conflict, notFound } from "@/shared/api/errors.ts";
 import { ApiErrorCode } from "@/shared/api/errorCodes.ts";
 import { findConnectorCycle, type ConnectorEdge } from "@/shared/pipeline/connectors.ts";
 import type {
@@ -19,6 +19,7 @@ const pipelineRef = { select: { id: true, name: true, isActive: true } } as cons
 const connectorInclude = {
   sourcePipeline: pipelineRef,
   targetPipeline: pipelineRef,
+  otherwisePipeline: pipelineRef,
   _count: { select: { runs: true } },
   // The latest decision, so a list can show whether the connector last started its target
   runs: {
@@ -27,6 +28,7 @@ const connectorInclude = {
     select: {
       id: true,
       status: true,
+      startedOtherwise: true,
       reason: true,
       checkAt: true,
       evaluatedAt: true,
@@ -35,6 +37,42 @@ const connectorInclude = {
     },
   },
 } as const;
+
+/** Every pipeline a connector can start, for the loop check. */
+function connectorEdges(connector: {
+  sourcePipelineId: string;
+  targetPipelineId: string;
+  otherwisePipelineId: string | null;
+}): ConnectorEdge[] {
+  const targets = [connector.targetPipelineId, connector.otherwisePipelineId];
+  return targets
+    .filter((target): target is string => Boolean(target))
+    .map((targetPipelineId) => ({
+      sourcePipelineId: connector.sourcePipelineId,
+      targetPipelineId,
+    }));
+}
+
+/** An otherwise pipeline is a second, different target, and only makes sense behind a rule. */
+function assertOtherwiseValid(connector: {
+  targetPipelineId: string;
+  otherwisePipelineId: string | null;
+  condition: unknown;
+}) {
+  if (!connector.otherwisePipelineId) return;
+  if (connector.otherwisePipelineId === connector.targetPipelineId) {
+    throw badRequest(
+      "The otherwise pipeline must differ from the target pipeline",
+      ApiErrorCode.CONNECTOR_OTHERWISE_INVALID
+    );
+  }
+  if (connector.condition === null || connector.condition === undefined) {
+    throw badRequest(
+      "An otherwise pipeline needs a condition; without one the target always starts",
+      ApiErrorCode.CONNECTOR_OTHERWISE_INVALID
+    );
+  }
+}
 
 /** A null rule is stored as SQL NULL; undefined leaves the column untouched. */
 function toConditionInput(
@@ -50,7 +88,11 @@ export class ConnectorService {
     return apiDb.pipelineConnector.findMany({
       where: query.pipelineId
         ? {
-            OR: [{ sourcePipelineId: query.pipelineId }, { targetPipelineId: query.pipelineId }],
+            OR: [
+              { sourcePipelineId: query.pipelineId },
+              { targetPipelineId: query.pipelineId },
+              { otherwisePipelineId: query.pipelineId },
+            ],
           }
         : undefined,
       include: connectorInclude,
@@ -70,12 +112,25 @@ export class ConnectorService {
   }
 
   async createConnector(body: CreateConnectorBody) {
-    await this.assertPipelinesExist([body.sourcePipelineId, body.targetPipelineId]);
+    const otherwisePipelineId = body.otherwisePipelineId ?? null;
+    assertOtherwiseValid({
+      targetPipelineId: body.targetPipelineId,
+      otherwisePipelineId,
+      condition: body.condition,
+    });
+    await this.assertPipelinesExist([
+      body.sourcePipelineId,
+      body.targetPipelineId,
+      ...(otherwisePipelineId ? [otherwisePipelineId] : []),
+    ]);
     if (body.isActive) {
-      await this.assertNoCycle({
-        sourcePipelineId: body.sourcePipelineId,
-        targetPipelineId: body.targetPipelineId,
-      });
+      await this.assertNoCycle(
+        connectorEdges({
+          sourcePipelineId: body.sourcePipelineId,
+          targetPipelineId: body.targetPipelineId,
+          otherwisePipelineId,
+        })
+      );
     }
 
     return apiDb.pipelineConnector.create({
@@ -84,6 +139,7 @@ export class ConnectorService {
         description: body.description,
         sourcePipelineId: body.sourcePipelineId,
         targetPipelineId: body.targetPipelineId,
+        otherwisePipelineId,
         on: body.on,
         condition: toConditionInput(body.condition),
         inputMapping: body.inputMapping,
@@ -97,17 +153,35 @@ export class ConnectorService {
   async updateConnector(id: string, body: UpdateConnectorBody) {
     const existing = await this.getConnector(id);
     const targetPipelineId = body.targetPipelineId ?? existing.targetPipelineId;
+    const otherwisePipelineId =
+      body.otherwisePipelineId === undefined
+        ? existing.otherwisePipelineId
+        : body.otherwisePipelineId;
     const isActive = body.isActive ?? existing.isActive;
+    assertOtherwiseValid({
+      targetPipelineId,
+      otherwisePipelineId,
+      condition: body.condition === undefined ? existing.condition : body.condition,
+    });
 
-    if (body.targetPipelineId !== undefined) {
-      await this.assertPipelinesExist([body.targetPipelineId]);
+    const newPipelineIds = [body.targetPipelineId, body.otherwisePipelineId].filter(
+      (pipelineId): pipelineId is string => typeof pipelineId === "string"
+    );
+    if (newPipelineIds.length > 0) {
+      await this.assertPipelinesExist(newPipelineIds);
     }
     // Re-check only when the graph of active connectors actually changes
     const graphChanges =
-      targetPipelineId !== existing.targetPipelineId || (isActive && !existing.isActive);
+      targetPipelineId !== existing.targetPipelineId ||
+      otherwisePipelineId !== existing.otherwisePipelineId ||
+      (isActive && !existing.isActive);
     if (isActive && graphChanges) {
       await this.assertNoCycle(
-        { sourcePipelineId: existing.sourcePipelineId, targetPipelineId },
+        connectorEdges({
+          sourcePipelineId: existing.sourcePipelineId,
+          targetPipelineId,
+          otherwisePipelineId,
+        }),
         id
       );
     }
@@ -119,6 +193,7 @@ export class ConnectorService {
           name: body.name,
           description: body.description,
           targetPipelineId: body.targetPipelineId,
+          otherwisePipelineId: body.otherwisePipelineId,
           on: body.on,
           condition: toConditionInput(body.condition),
           inputMapping: body.inputMapping,
@@ -204,12 +279,18 @@ export class ConnectorService {
     }
   }
 
-  private async assertNoCycle(edge: ConnectorEdge, excludeConnectorId?: string) {
-    const existing = await apiDb.pipelineConnector.findMany({
+  private async assertNoCycle(edges: ConnectorEdge[], excludeConnectorId?: string) {
+    const connectors = await apiDb.pipelineConnector.findMany({
       where: { isActive: true, ...(excludeConnectorId ? { id: { not: excludeConnectorId } } : {}) },
-      select: { sourcePipelineId: true, targetPipelineId: true },
+      select: { sourcePipelineId: true, targetPipelineId: true, otherwisePipelineId: true },
     });
-    const cycle = findConnectorCycle(existing, edge);
+    const existing = connectors.flatMap(connectorEdges);
+    let cycle: string[] | null = null;
+    for (const edge of edges) {
+      cycle = findConnectorCycle(existing, edge);
+      if (cycle) break;
+      existing.push(edge);
+    }
     if (!cycle) return;
 
     const pipelines = await apiDb.pipeline.findMany({

@@ -71,7 +71,10 @@ export class ConnectorEvaluator {
       );
       return;
     }
-    if (!matched) {
+    // Not met: start the otherwise pipeline if there is one, else stop here
+    const startedOtherwise = !matched;
+    const targetPipelineId = matched ? connector.targetPipelineId : connector.otherwisePipelineId;
+    if (!targetPipelineId) {
       await this.end(prisma, run, ConnectorRunStatus.NOT_MET, "Rule not met");
       return;
     }
@@ -96,13 +99,13 @@ export class ConnectorEvaluator {
       // Claim the run; a concurrent evaluator blocks on this row and then finds it taken
       const claimed = await tx.connectorRun.updateMany({
         where: { id: run.id, status: ConnectorRunStatus.WAITING },
-        data: { status: ConnectorRunStatus.FIRED, evaluatedAt: new Date() },
+        data: { status: ConnectorRunStatus.FIRED, startedOtherwise, evaluatedAt: new Date() },
       });
       if (claimed.count === 0) {
         return;
       }
 
-      const result = await startExecution(tx, connector.targetPipelineId, {
+      const result = await startExecution(tx, targetPipelineId, {
         triggeredBy: "connector",
         context: input,
         chainDepth,
@@ -134,7 +137,9 @@ export class ConnectorEvaluator {
         tx,
         run.sourceExecutionId,
         "INFO",
-        `Connector "${connector.name}" started execution ${result.executionId}`
+        startedOtherwise
+          ? `Connector "${connector.name}": rule not met, started the otherwise pipeline (execution ${result.executionId})`
+          : `Connector "${connector.name}" started execution ${result.executionId}`
       );
       await tx.executionLog.create({
         data: {

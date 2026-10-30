@@ -105,7 +105,10 @@ export class PipelineQueries {
 
       // Connectors from other pipelines would lose their target; the user removes them first
       const incomingConnectors = await tx.pipelineConnector.findMany({
-        where: { targetPipelineId: id, sourcePipelineId: { not: id } },
+        where: {
+          OR: [{ targetPipelineId: id }, { otherwisePipelineId: id }],
+          sourcePipelineId: { not: id },
+        },
         select: { id: true, name: true, sourcePipeline: { select: { id: true, name: true } } },
       });
       if (incomingConnectors.length > 0) {
