@@ -64,6 +64,22 @@ describe("climatePredictionParamsSchema", () => {
     ).toBe(true);
   });
 
+  it("pulls either mapped data elements or, for older workflows, listed items", () => {
+    const mapped = { source: "instance", routeCode: "caps-src-hmis", mapped: [CASES] };
+    expect(climatePredictionParamsSchema.safeParse({ ...params(), disease: mapped }).success).toBe(
+      true
+    );
+    expect(climatePredictionParamsSchema.safeParse({ ...params(), disease: pulled }).success).toBe(
+      true
+    );
+    expect(
+      climatePredictionParamsSchema.safeParse({
+        ...params(),
+        disease: { source: "instance", routeCode: "caps-src-hmis" },
+      }).success
+    ).toBe(false);
+  });
+
   it("limits how many months a run refreshes", () => {
     const result = climatePredictionParamsSchema.safeParse({
       ...params(),
@@ -168,6 +184,18 @@ describe("buildClimatePredictionPlan", () => {
         success: true,
       });
     }
+  });
+});
+
+describe("disease pull from instance mappings", () => {
+  it("gives the pull step the mapped data elements, not items", () => {
+    const plan = buildClimatePredictionPlan(
+      params({ disease: { source: "instance", routeCode: "caps-src-hmis", mapped: [CASES] } }),
+      null
+    );
+    const config = plan.pipelines[1]!.steps[0]!.handlerConfig;
+    expect(config).toMatchObject({ routeCode: "caps-src-hmis", mapped: [CASES] });
+    expect(config).not.toHaveProperty("items");
   });
 });
 

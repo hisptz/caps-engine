@@ -43,10 +43,19 @@ const diseaseSchema = z.discriminatedUnion("source", [
     routeCode: z.string().regex(SOURCE_ROUTE_CODE_PATTERN, {
       message: "Pick a connected instance (route code starting with caps-src-)",
     }),
-    items: z.array(pullItemSchema).min(1),
+    /** Staging data elements to pull, as the instance's pull mappings say where each comes from */
+    mapped: z.array(uid).min(1).optional(),
+    /** Workflows made before instance mappings list their own items; they keep working */
+    items: z.array(pullItemSchema).min(1).optional(),
     orgUnitMatch: z.enum(["id", "code"]).default("id"),
   }),
 ]);
+
+/** The staging data elements a disease pull writes into. */
+export function diseaseTargets(disease: ClimatePredictionParams["disease"]): string[] {
+  if (disease.source !== "instance") return [];
+  return disease.mapped ?? (disease.items ?? []).map(pullItemTarget);
+}
 
 const predictionSchema = z.object({
   /** CHAP prediction setup; its org units, period type and inputs drive the workflow */
@@ -84,6 +93,16 @@ export const climatePredictionParamsSchema = z
     prediction: predictionSchema.nullable().default(null),
   })
   .superRefine((params, ctx) => {
+    if (
+      params.disease.source === "instance" &&
+      (params.disease.mapped === undefined) === (params.disease.items === undefined)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["disease", "mapped"],
+        message: "Pick the disease data to pull",
+      });
+    }
     if (params.periodType === "MONTHLY" && params.recentPeriods > MAX_ROLLING_COUNT.monthly) {
       ctx.addIssue({
         code: "custom",
@@ -161,10 +180,8 @@ function suppliedDataElements(params: ClimatePredictionParams): Map<string, stri
   for (const variable of params.climate) {
     supplied.set(variable.dataElement, `climate (${variable.datasetId})`);
   }
-  if (params.disease.source === "instance") {
-    for (const item of params.disease.items) {
-      supplied.set(pullItemTarget(item), "disease data pull");
-    }
+  for (const id of diseaseTargets(params.disease)) {
+    supplied.set(id, "disease data pull");
   }
   return supplied;
 }
@@ -350,7 +367,9 @@ export function buildClimatePredictionPlan(
           handlerKey: Handlers.DHIS2_INSTANCE_PULL,
           handlerConfig: {
             routeCode: params.disease.routeCode,
-            items: params.disease.items,
+            ...(params.disease.mapped
+              ? { mapped: params.disease.mapped }
+              : { items: params.disease.items }),
             orgUnit: {
               ...(orgUnit.ids.length > 0 ? { ids: orgUnit.ids } : {}),
               ...(orgUnit.level ? { levels: [orgUnit.level] } : {}),

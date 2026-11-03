@@ -11,6 +11,7 @@ import { testSourceRoute } from "@/services/api/modules/sourceRoutes/service.ts"
 import { ClimateService } from "@/services/api/modules/climate/service.ts";
 import { nextRunAt, WorkflowService } from "@/services/api/modules/workflows/service.ts";
 import { pullItemTarget } from "@/services/worker/services/handlers/dhis2InstancePull/schemas/config.ts";
+import { MappingDirection } from "@db/client";
 import {
   buildClimatePredictionPlan,
   checkAgainstSetup,
@@ -40,6 +41,8 @@ export type TemplateLookups = {
   /** Data elements not found in staging; null when they could not be checked */
   missingDataElements(ids: string[]): Promise<string[] | null>;
   routeReachable(routeCode: string): Promise<boolean>;
+  /** Staging data elements the instance's pull mappings fill */
+  pulledFromInstance(routeCode: string): Promise<Set<string>>;
   /** Datasets Open Climate Service has ingested; null when OCS could not be reached */
   climateDatasets(): Promise<ClimateDataset[] | null>;
 };
@@ -91,6 +94,13 @@ export const defaultLookups: TemplateLookups = {
   },
   async routeReachable(routeCode) {
     return (await testSourceRoute(routeCode)).reachable;
+  },
+  async pulledFromInstance(routeCode) {
+    const mappings = await apiDb.instanceMapping.findMany({
+      where: { routeCode, direction: MappingDirection.PULL },
+      select: { stagingDataElement: true },
+    });
+    return new Set(mappings.map((m) => m.stagingDataElement));
   },
   async climateDatasets() {
     try {
@@ -188,13 +198,24 @@ export class TemplateService {
     }
 
     const written = this.dataElementsWritten(params);
-    const [missing, reachable, datasets] = await Promise.all([
+    const mapped = params.disease.source === "instance" ? params.disease.mapped : undefined;
+    const [missing, reachable, datasets, pulled] = await Promise.all([
       this.lookups.missingDataElements([...written.keys()]),
       params.disease.source === "instance"
         ? this.lookups.routeReachable(params.disease.routeCode)
         : Promise.resolve(true),
       this.lookups.climateDatasets(),
+      mapped && params.disease.source === "instance"
+        ? this.lookups.pulledFromInstance(params.disease.routeCode)
+        : Promise.resolve(null),
     ]);
+    const notPulled = mapped && pulled ? mapped.filter((id) => !pulled.has(id)) : [];
+    if (notPulled.length > 0) {
+      errors.push({
+        path: "disease.mapped",
+        message: `Not pulled from this instance: ${notPulled.join(", ")}. Map them under Settings › Connected instances › Mappings.`,
+      });
+    }
     if (missing === null) {
       warnings.push({ path: "", message: "Could not check the data elements in staging" });
     } else {
@@ -244,9 +265,13 @@ export class TemplateService {
     const written = new Map<string, string>();
     params.climate.forEach((v, i) => written.set(v.dataElement, `climate.${i}.dataElement`));
     if (params.disease.source === "instance") {
-      params.disease.items.forEach((item, i) =>
-        written.set(pullItemTarget(item), `disease.items.${i}`)
-      );
+      if (params.disease.mapped) {
+        params.disease.mapped.forEach((id, i) => written.set(id, `disease.mapped.${i}`));
+      } else {
+        params.disease.items?.forEach((item, i) =>
+          written.set(pullItemTarget(item), `disease.items.${i}`)
+        );
+      }
     }
     return written;
   }

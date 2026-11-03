@@ -40,6 +40,7 @@ const lookups = {
   predictionSetup: vi.fn(async (id: number) => ({ setup: id === setup.id ? setup : null })),
   missingDataElements: vi.fn<(ids: string[]) => Promise<string[] | null>>(async () => []),
   routeReachable: vi.fn(async () => true),
+  pulledFromInstance: vi.fn(async () => new Set<string>()),
   climateDatasets: vi.fn<() => Promise<{ id: string; periodType: string | null }[] | null>>(
     async () => [{ id: "era5.precip", periodType: "daily" }]
   ),
