@@ -3,9 +3,13 @@ import { ConnectorTriggerOn, PipelineExecutionStatus } from "@db/client";
 import { finishExecution } from "@/shared/pipeline/finishExecution.ts";
 import { QUEUES } from "@/services/worker/constants/monitor.ts";
 
-function createTx(connectors: { id: string; delayMinutes: number }[]) {
+function createTx(
+  connectors: { id: string; delayMinutes: number }[],
+  workflowRunId: string | null = null
+) {
   return {
-    pipelineExecution: { update: vi.fn().mockResolvedValue({}) },
+    pipelineExecution: { update: vi.fn().mockResolvedValue({ workflowRunId }) },
+    pipelineMerge: { findMany: vi.fn().mockResolvedValue([]) },
     pipelineConnector: { findMany: vi.fn().mockResolvedValue(connectors) },
     connectorRun: {
       createManyAndReturn: vi
@@ -32,9 +36,32 @@ describe("finishExecution", () => {
     expect(tx.pipelineExecution.update).toHaveBeenCalledWith({
       where: { id: "exec-1" },
       data: { status: PipelineExecutionStatus.COMPLETED, finishedAt: expect.any(Date) },
+      select: { workflowRunId: true },
     });
     expect(tx.connectorRun.createManyAndReturn).not.toHaveBeenCalled();
     expect(tx.outboxMessage.create).not.toHaveBeenCalled();
+    // Not in a workflow run: no merge can be waiting for it
+    expect(tx.pipelineMerge.findMany).not.toHaveBeenCalled();
+  });
+
+  it("looks for merges waiting on the pipeline when it is part of a workflow run", async () => {
+    const tx = createTx([], "wf-run-1");
+
+    await finishExecution(tx as never, {
+      executionId: "exec-1",
+      pipelineId: "pipe-1",
+      status: PipelineExecutionStatus.FAILED,
+    });
+
+    expect(tx.pipelineMerge.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          isActive: true,
+          workflow: { runs: { some: { id: "wf-run-1" } } },
+          sources: { some: { pipelineId: "pipe-1" } },
+        },
+      })
+    );
   });
 
   it("looks up active connectors for the matching outcome or any outcome", async () => {

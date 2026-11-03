@@ -13,6 +13,7 @@ const db = vi.hoisted(() => ({
     update: vi.fn(),
   },
   connectorRun: { findUnique: vi.fn(), updateMany: vi.fn() },
+  pipelineMerge: { findMany: vi.fn() },
 }));
 
 vi.mock("@/services/api/utils/db.ts", () => ({ apiDb: db }));
@@ -75,6 +76,7 @@ describe("ConnectorService", () => {
     service = new ConnectorService();
     db.pipeline.count.mockResolvedValue(2);
     db.pipelineConnector.findMany.mockResolvedValue([]);
+    db.pipelineMerge.findMany.mockResolvedValue([]);
     db.pipelineConnector.create.mockImplementation(({ data }: { data: object }) => data);
   });
 

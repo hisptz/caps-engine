@@ -1,4 +1,10 @@
-import { ConnectorRunStatus, LogLevel, PipelineExecutionStatus, PrismaClient } from "@db/client";
+import {
+  ConnectorRunStatus,
+  LogLevel,
+  MergeRunStatus,
+  PipelineExecutionStatus,
+  PrismaClient,
+} from "@db/client";
 import type { Channel, ConsumeMessage } from "amqplib";
 import { logger } from "@/shared/utils";
 import type { InputJsonValue } from "@prisma/client/runtime/client";
@@ -94,6 +100,12 @@ export class DlxMonitor {
       await this.markConnectorRunFailed(connectorRunId, sourceQueue, reason);
     }
 
+    // A merge decision whose message died would leave its merge run WAITING
+    const mergeRunId = typeof body.mergeRunId === "string" ? body.mergeRunId : null;
+    if (mergeRunId) {
+      await this.markMergeRunFailed(mergeRunId, sourceQueue, reason);
+    }
+
     // Store the dead message for inspection and potential replay
     await this.logDeadMessage({
       executionId,
@@ -102,6 +114,26 @@ export class DlxMonitor {
       body,
       xDeath,
     });
+  }
+
+  private async markMergeRunFailed(
+    mergeRunId: string,
+    sourceQueue: string,
+    reason: string
+  ): Promise<void> {
+    try {
+      await this.prisma.mergeRun.updateMany({
+        where: { id: mergeRunId, status: MergeRunStatus.WAITING },
+        data: {
+          status: MergeRunStatus.FAILED,
+          evaluatedAt: new Date(),
+          reason: `Message dead-lettered from ${sourceQueue} (${reason})`,
+        },
+      });
+      logger.error(`[dlx-monitor] Marked merge run FAILED: ${mergeRunId} (from ${sourceQueue})`);
+    } catch (err) {
+      logger.error(`[dlx-monitor] Failed to mark merge run as failed: ${mergeRunId}`, err);
+    }
   }
 
   // A connector run whose message died would otherwise stay WAITING forever

@@ -28,6 +28,9 @@ type MockPrisma = {
   connectorRun: {
     updateMany: ReturnType<typeof vi.fn>;
   };
+  mergeRun: {
+    updateMany: ReturnType<typeof vi.fn>;
+  };
   $transaction: ReturnType<typeof vi.fn>;
 };
 
@@ -44,6 +47,9 @@ function buildMockPrisma(): MockPrisma {
       findMany: vi.fn().mockResolvedValue([]),
     },
     connectorRun: {
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    mergeRun: {
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     $transaction: vi.fn(),
@@ -148,6 +154,19 @@ describe("DlxMonitor — dead message handling", () => {
       })
     );
     expect(mockPrisma.pipelineExecution.update).not.toHaveBeenCalled();
+    expect(mockChannel.ack).toHaveBeenCalled();
+  });
+
+  it("marks a WAITING merge run FAILED when its merge message is dead-lettered", async () => {
+    await capturedConsumeHandler!(buildDeadMessage({ mergeRunId: "merge-run-1" }));
+
+    expect(mockPrisma.mergeRun.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "merge-run-1", status: "WAITING" },
+        data: expect.objectContaining({ status: "FAILED" }),
+      })
+    );
+    expect(mockPrisma.connectorRun.updateMany).not.toHaveBeenCalled();
     expect(mockChannel.ack).toHaveBeenCalled();
   });
 

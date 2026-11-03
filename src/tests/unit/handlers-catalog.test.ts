@@ -18,7 +18,7 @@ import { dhis2AnalyticsRunConfigSchema } from "@/services/worker/services/handle
 describe("handler catalog", () => {
   it("lists all registered handlers with display metadata", () => {
     const handlers = listHandlerDescriptors();
-    expect(handlers).toHaveLength(15);
+    expect(handlers).toHaveLength(16);
     const keys = handlers.map((h) => h.key).sort();
     expect(keys).toEqual(
       [
@@ -28,6 +28,7 @@ describe("handler catalog", () => {
         "climate-openeo-download",
         "climate-openeo-poll",
         "dhis2-analytics-run",
+        "dhis2-data-check",
         "dhis2-data-upload",
         "dhis2-instance-pull",
         "dhis2-instance-push",

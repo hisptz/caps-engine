@@ -13,6 +13,9 @@ import { errorHandler } from "@/shared/api/errors.ts";
 import { pipelinesModule } from "@/services/api/modules/pipelines/index.ts";
 import { schedulesModule } from "@/services/api/modules/schedules/index.ts";
 import { connectorsModule } from "@/services/api/modules/connectors/index.ts";
+import { workflowsModule } from "@/services/api/modules/workflows/index.ts";
+import { mergesModule } from "@/services/api/modules/merges/index.ts";
+import { templatesModule } from "@/services/api/modules/templates/index.ts";
 import { climateModule } from "@/services/api/modules/climate/index.ts";
 import { monitoringModule } from "@/services/api/modules/monitoring/index.ts";
 import { handlersModule } from "@/services/api/modules/handlers/index.ts";
@@ -51,6 +54,9 @@ const app = new Elysia()
   .use(pipelinesModule)
   .use(schedulesModule)
   .use(connectorsModule)
+  .use(workflowsModule)
+  .use(mergesModule)
+  .use(templatesModule)
   .use(climateModule)
   .use(monitoringModule)
   .use(handlersModule)

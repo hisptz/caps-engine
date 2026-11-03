@@ -24,6 +24,9 @@ model PipelineExecution {
   // How many connectors led to this execution (0 = started directly); caps runaway chains
   chainDepth Int @default(0)
 
+  // The workflow run this execution is part of; null = started on its own
+  workflowRunId String? @db.Uuid
+
   startedAt  DateTime?
   finishedAt DateTime?
   createdAt  DateTime  @default(now())
@@ -31,6 +34,7 @@ model PipelineExecution {
 
   pipeline       Pipeline           @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   schedule       PipelineSchedule?  @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  workflowRun    WorkflowRun?       @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
   stepExecutions StepExecution[]
   retryCommands  StepRetryCommand[]
   logs           ExecutionLog[]
@@ -39,8 +43,13 @@ model PipelineExecution {
   outgoingConnectorRuns ConnectorRun[] @relation("ConnectorRunSource")
   incomingConnectorRun  ConnectorRun?  @relation("ConnectorRunTarget")
 
+  // Merges this execution counted towards, and the merge run that started it
+  mergeArrivals    MergeArrival[] @relation("MergeArrivals")
+  incomingMergeRun MergeRun?      @relation("MergeRunTarget")
+
   @@index([pipelineId])
   @@index([scheduleId])
+  @@index([workflowRunId])
   @@index([status])
   @@index([createdAt])
   @@map("pipeline_executions")

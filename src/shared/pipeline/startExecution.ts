@@ -5,12 +5,14 @@ import type { PipelineJobMessage } from "@/services/worker/services/runners/pipe
 import { enqueueOutboxMessage, type OutboxTx } from "@/shared/pipeline/outbox.ts";
 
 export type StartExecutionOptions = {
-  triggeredBy: "scheduler" | "api" | "webhook" | "connector";
+  triggeredBy: "scheduler" | "api" | "webhook" | "connector" | "workflow" | "merge";
   context?: Record<string, unknown>;
   scheduleId?: string;
   scheduleInputContext?: Record<string, unknown>;
   /** Number of connectors that led here; set by the connector evaluator */
   chainDepth?: number;
+  /** The workflow run this start belongs to; kept only if the pipeline is in that workflow */
+  workflowRun?: { id: string; workflowId: string };
 };
 
 export type StartExecutionResult = {
@@ -88,6 +90,10 @@ export async function startExecution(
       status: PipelineExecutionStatus.PENDING,
       triggeredBy: opts.triggeredBy,
       chainDepth: opts.chainDepth ?? 0,
+      workflowRunId:
+        opts.workflowRun && pipeline.workflowId === opts.workflowRun.workflowId
+          ? opts.workflowRun.id
+          : null,
       context: mergedContext as InputJsonValue,
     },
   });

@@ -12,6 +12,9 @@ model Pipeline {
 
   concurrencyPolicy ConcurrencyPolicy @default(SKIP)
 
+  // The workflow this pipeline belongs to, if any (at most one)
+  workflowId String? @db.Uuid
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -23,6 +26,12 @@ model Pipeline {
   incomingConnectors  PipelineConnector[] @relation("ConnectorTarget")
   otherwiseConnectors PipelineConnector[] @relation("ConnectorOtherwise")
 
+  workflow Workflow? @relation(fields: [workflowId], references: [id], onDelete: SetNull)
+
+  mergeSources MergeSource[]   @relation("MergeSources")
+  mergeTargets PipelineMerge[] @relation("MergeTarget")
+
+  @@index([workflowId])
   @@map("pipelines")
 }
 

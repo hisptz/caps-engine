@@ -2,7 +2,8 @@ import { ConnectorRunStatus, Prisma } from "@db/client";
 import { apiDb } from "@/services/api/utils/db.ts";
 import { badRequest, conflict, notFound } from "@/shared/api/errors.ts";
 import { ApiErrorCode } from "@/shared/api/errorCodes.ts";
-import { findConnectorCycle, type ConnectorEdge } from "@/shared/pipeline/connectors.ts";
+import type { ConnectorEdge } from "@/shared/pipeline/connectors.ts";
+import { findPipelineLoop } from "@/services/api/utils/pipeline/graph.ts";
 import type {
   CreateConnectorBody,
   ListConnectorRunsQuery,
@@ -280,27 +281,12 @@ export class ConnectorService {
   }
 
   private async assertNoCycle(edges: ConnectorEdge[], excludeConnectorId?: string) {
-    const connectors = await apiDb.pipelineConnector.findMany({
-      where: { isActive: true, ...(excludeConnectorId ? { id: { not: excludeConnectorId } } : {}) },
-      select: { sourcePipelineId: true, targetPipelineId: true, otherwisePipelineId: true },
-    });
-    const existing = connectors.flatMap(connectorEdges);
-    let cycle: string[] | null = null;
-    for (const edge of edges) {
-      cycle = findConnectorCycle(existing, edge);
-      if (cycle) break;
-      existing.push(edge);
-    }
-    if (!cycle) return;
-
-    const pipelines = await apiDb.pipeline.findMany({
-      where: { id: { in: cycle } },
-      select: { id: true, name: true },
-    });
-    const names = new Map(pipelines.map((p) => [p.id, p.name]));
-    const path = cycle.map((id) => names.get(id) ?? id).join(" → ");
-    throw conflict(`Connector would create a loop: ${path}`, ApiErrorCode.CONNECTOR_CREATES_CYCLE, {
-      pipelineIds: cycle,
-    });
+    const loop = await findPipelineLoop(apiDb, edges, { connectorId: excludeConnectorId });
+    if (!loop) return;
+    throw conflict(
+      `Connector would create a loop: ${loop.path}`,
+      ApiErrorCode.CONNECTOR_CREATES_CYCLE,
+      { pipelineIds: loop.pipelineIds }
+    );
   }
 }

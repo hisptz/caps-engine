@@ -3,7 +3,7 @@ import { z } from "zod";
 export const SCHEDULE_EVENTS_CHANNEL = "caps_schedule_events";
 
 export const scheduleEventSchema = z.object({
-  table: z.enum(["pipeline_schedules", "pipelines"]),
+  table: z.enum(["pipeline_schedules", "pipelines", "workflows"]),
   op: z.enum(["INSERT", "UPDATE", "DELETE"]),
   id: z.uuid(),
 });

@@ -50,7 +50,9 @@ export class MonitoringQueries {
           orderBy: { loggedAt: "asc" },
           take: 500, // Cap for very chatty pipelines
         },
-        // The connector that started this execution, if any
+        workflowRun: {
+          select: { id: true, createdAt: true, workflow: { select: { id: true, name: true } } },
+        },
         incomingConnectorRun: {
           include: {
             connector: { select: { id: true, name: true } },

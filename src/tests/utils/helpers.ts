@@ -150,6 +150,7 @@ export function buildMockExecution(overrides?: Partial<PipelineExecution>): Pipe
     currentStepIndex: 0,
     triggeredBy: null,
     chainDepth: 0,
+    workflowRunId: null,
     startedAt: null,
     finishedAt: null,
     createdAt: new Date(),
@@ -280,13 +281,16 @@ export async function clearExecutionData(prisma: PrismaClient): Promise<void> {
   await prisma.stepRetryCommand.deleteMany();
   await prisma.stepExecution.deleteMany();
   await prisma.outboxMessage.deleteMany();
-  // Connectors restrict deleting their target pipeline, so they go first
+  // Merges and connectors restrict deleting their target pipeline, so they go first
+  await prisma.pipelineMerge.deleteMany();
   await prisma.connectorRun.deleteMany();
   await prisma.pipelineConnector.deleteMany();
   await prisma.pipelineExecution.deleteMany();
   await prisma.pipelineSchedule.deleteMany();
   await prisma.pipelineStep.deleteMany();
   await prisma.pipeline.deleteMany();
+  await prisma.workflowRun.deleteMany();
+  await prisma.workflow.deleteMany();
 }
 
 /** Flush pending outbox rows synchronously for tests (no RabbitMQ confirms). */

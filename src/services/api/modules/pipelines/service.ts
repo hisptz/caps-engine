@@ -13,6 +13,7 @@ import type {
   ListPipelinesQuery,
   CreatePipelineBody,
   UpdatePipelineBody,
+  DuplicatePipelineBody,
   CreateStepBody,
   UpdateStepBody,
   CreateScheduleBody,
@@ -66,6 +67,24 @@ export class PipelineService {
   async updatePipeline(id: string, body: UpdatePipelineBody) {
     try {
       return await this.queries.updatePipeline(id, body);
+    } catch (err) {
+      if (isPrismaNotFound(err)) {
+        throw notFound("Pipeline not found", ApiErrorCode.PIPELINE_NOT_FOUND);
+      }
+      if (isPrismaDuplicate(err)) {
+        throw conflict(
+          "A pipeline with that name already exists",
+          ApiErrorCode.PIPELINE_DUPLICATE_NAME
+        );
+      }
+      throw err;
+    }
+  }
+
+  async duplicatePipeline(id: string, body: DuplicatePipelineBody) {
+    try {
+      const copy = await this.queries.duplicatePipeline(id, body.name);
+      return await this.queries.getPipeline(copy.id);
     } catch (err) {
       if (isPrismaNotFound(err)) {
         throw notFound("Pipeline not found", ApiErrorCode.PIPELINE_NOT_FOUND);

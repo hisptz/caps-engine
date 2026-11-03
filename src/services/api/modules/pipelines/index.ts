@@ -6,6 +6,7 @@ import {
   listPipelinesQuery,
   createPipelineBody,
   updatePipelineBody,
+  duplicatePipelineBody,
   createStepBody,
   updateStepBody,
   createScheduleBody,
@@ -82,6 +83,28 @@ export const pipelinesModule = new Elysia({ prefix: "/pipelines", tags: ["Pipeli
       },
     },
   })
+  .post(
+    "/:id/duplicate",
+    ({ params, body, set }) => {
+      set.status = 201;
+      return pipelineService.duplicatePipeline(params.id, body);
+    },
+    {
+      params: idParams,
+      body: duplicatePipelineBody,
+      detail: {
+        summary: "Duplicate pipeline",
+        description:
+          "Copy a pipeline and its steps under a new name. Schedules, connectors and its workflow are not copied.",
+        operationId: "duplicatePipeline",
+        responses: {
+          "201": { description: "The copy, with its steps" },
+          "404": { description: "Pipeline not found" },
+          "409": { description: "A pipeline with that name already exists" },
+        },
+      },
+    }
+  )
   .get("/:id/steps", ({ params }) => pipelineService.listSteps(params.id), {
     params: idParams,
     detail: {

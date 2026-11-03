@@ -28,6 +28,7 @@ import {
   dhis2InstancePushContextSchema,
 } from "@/services/worker/services/handlers/dhis2InstancePush/schemas/config.ts";
 import { dhis2NotifyConfigSchema } from "@/services/worker/services/handlers/dhis2Notify/schemas/config.ts";
+import { dhis2DataCheckConfigSchema } from "@/services/worker/services/handlers/dhis2DataCheck/schemas/config.ts";
 import type { ZodType } from "zod";
 
 export type HandlerOutputField = {
@@ -69,6 +70,7 @@ export enum Handlers {
   ALERT_GENERATION = "alert-generation",
   EVENT_DATA_UPLOAD = "event-data-upload",
   DHIS2_NOTIFY = "dhis2-notify",
+  DHIS2_DATA_CHECK = "dhis2-data-check",
 }
 
 export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
@@ -202,6 +204,28 @@ export const HANDLERS: Map<Handlers, HandlerRegistryEntry> = new Map<
       schemas: {
         config: dhis2InstancePushConfigSchema,
         context: dhis2InstancePushContextSchema,
+      },
+      contextReplaces: ["period"],
+    },
+  ],
+  [
+    Handlers.DHIS2_DATA_CHECK,
+    {
+      queueName: "step.dhis2-data-check",
+      displayName: "DHIS2 Data Check",
+      description:
+        "Check whether data is already in DHIS2: count the values entered for chosen data elements, org units and periods",
+      tags: ["dhis2"],
+      outputs: {
+        fields: [
+          { key: "found", label: "Values found", type: "number" },
+          { key: "expected", label: "Values expected", type: "number" },
+          { key: "completeness", label: "Completeness (%)", type: "number" },
+        ],
+      },
+      schemas: {
+        config: dhis2DataCheckConfigSchema,
+        context: dhis2InstancePullContextSchema,
       },
       contextReplaces: ["period"],
     },

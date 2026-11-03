@@ -81,3 +81,18 @@ enum ConnectorRunStatus {
   FAILED
   CANCELLED
 }
+
+enum MergeTriggerRule {
+  ALL_SUCCEEDED
+  ALL_DONE
+}
+
+enum MergeRunStatus {
+  WAITING
+  FIRED
+  NOT_MET
+  SKIPPED
+  FAILED
+  TIMED_OUT
+  CANCELLED
+}

@@ -1,6 +1,7 @@
 import { ConnectorTriggerOn, PipelineExecutionStatus } from "@db/client";
 import { QUEUES } from "@/services/worker/constants/monitor.ts";
 import { enqueueOutboxMessage, type OutboxTx } from "@/shared/pipeline/outbox.ts";
+import { recordMergeArrivals } from "@/shared/pipeline/merges.ts";
 
 export type FinalExecutionStatus =
   | typeof PipelineExecutionStatus.COMPLETED
@@ -16,7 +17,8 @@ const MINUTE_MS = 60 * 1000;
 /**
  * Mark an execution COMPLETED or FAILED and, in the same transaction, create a connector run for
  * every active connector whose trigger matches. Each run is queued through the outbox for when its
- * delay is up. Every path that ends an execution this way must go through here, or connectors miss it.
+ * delay is up. An execution in a workflow run also counts towards that workflow's merges. Every
+ * path that ends an execution this way must go through here, or connectors and merges miss it.
  *
  * Returns the ids of the connector runs it created.
  */
@@ -26,10 +28,21 @@ export async function finishExecution(
 ): Promise<string[]> {
   const now = new Date();
 
-  await tx.pipelineExecution.update({
+  const { workflowRunId } = await tx.pipelineExecution.update({
     where: { id: args.executionId },
     data: { status: args.status, finishedAt: now },
+    select: { workflowRunId: true },
   });
+
+  if (workflowRunId) {
+    await recordMergeArrivals(tx, {
+      executionId: args.executionId,
+      pipelineId: args.pipelineId,
+      workflowRunId,
+      status: args.status,
+      now,
+    });
+  }
 
   const on =
     args.status === PipelineExecutionStatus.COMPLETED

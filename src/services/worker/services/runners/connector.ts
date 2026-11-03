@@ -31,7 +31,14 @@ export class ConnectorEvaluator {
       where: { id: connectorRunId },
       include: {
         connector: true,
-        sourceExecution: { select: { id: true, context: true, chainDepth: true } },
+        sourceExecution: {
+          select: {
+            id: true,
+            context: true,
+            chainDepth: true,
+            workflowRun: { select: { id: true, workflowId: true } },
+          },
+        },
       },
     });
 
@@ -109,6 +116,8 @@ export class ConnectorEvaluator {
         triggeredBy: "connector",
         context: input,
         chainDepth,
+        // A target in the same workflow joins the source's workflow run
+        workflowRun: sourceExecution.workflowRun ?? undefined,
       });
 
       if (result.skipped) {

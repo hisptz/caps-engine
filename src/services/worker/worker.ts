@@ -20,6 +20,8 @@ import { DlxMonitor } from "@/services/worker/services/monitor/monitor.ts";
 import { STEP_QUEUES } from "@/services/worker/constants/handlers.ts";
 import { OutboxPublisher } from "@/services/worker/services/outbox/publisher.ts";
 import { ConnectorEvaluator } from "@/services/worker/services/runners/connector.ts";
+import { MergeEvaluator } from "@/services/worker/services/runners/merge.ts";
+import type { MergeJobMessage } from "@/shared/pipeline/merges.ts";
 import { QUEUES } from "@/services/worker/constants/monitor.ts";
 import type { ConnectorJobMessage } from "@/shared/pipeline/finishExecution.ts";
 
@@ -61,6 +63,7 @@ async function startWorker() {
   const coordinator = new PipelineCoordinator({ prisma, channel, stepRunner });
   const stepWorker = new StepWorker({ prisma, channel });
   const connectorEvaluator = new ConnectorEvaluator({ prisma });
+  const mergeEvaluator = new MergeEvaluator({ prisma });
   const dlxMonitor = new DlxMonitor(prisma, channel);
   const outboxPublisher = new OutboxPublisher(prisma, connection);
 
@@ -121,7 +124,18 @@ async function startWorker() {
     if (!msg) return;
     let connectorRunId: string | undefined;
     try {
-      ({ connectorRunId } = JSON.parse(msg.content.toString()) as ConnectorJobMessage);
+      const body = JSON.parse(msg.content.toString()) as Partial<
+        ConnectorJobMessage & MergeJobMessage
+      >;
+      // Merge decisions share this queue; their messages carry a merge run id instead
+      if (body.mergeRunId) {
+        logger.info(`[worker] [connectors] Merge message received mergeRunId=${body.mergeRunId}`);
+        await mergeEvaluator.handle(body.mergeRunId);
+        channel.ack(msg);
+        return;
+      }
+      connectorRunId = body.connectorRunId;
+      if (!connectorRunId) throw new Error("Message has no connectorRunId or mergeRunId");
       logger.info(`[worker] [connectors] Message received connectorRunId=${connectorRunId}`);
       await connectorEvaluator.handle(connectorRunId);
       logger.info(`[worker] [connectors] Ack connectorRunId=${connectorRunId}`);

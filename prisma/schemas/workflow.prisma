@@ -1,0 +1,60 @@
+// ============================================================
+// WORKFLOW CLUSTER
+// A frame around several pipelines and the connectors between them.
+// A workflow has its own start (schedule or API); one start is one
+// workflow run, and every execution it leads to carries that run's id.
+// ============================================================
+
+model Workflow {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique
+  description String?
+  isActive    Boolean @default(true)
+
+  // Standard 5-part cron expression; null = started by hand only
+  cronExpr String?
+
+  // Set when created from a template (e.g. "climate-prediction"): the parameters it was made
+  // with, and what it generated ({ pipelines: { <role>: { id, fingerprint } }, join }), so
+  // "Edit setup" can update the same pipelines and notice hand edits
+  template       String?
+  templateParams Json?
+  templateState  Json?
+
+  // Populated by the scheduler after each trigger
+  lastRunAt DateTime?
+  nextRunAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // A pipeline belongs to at most one workflow
+  pipelines Pipeline[]
+  runs      WorkflowRun[]
+  merges    PipelineMerge[]
+
+  @@map("workflows")
+}
+
+model WorkflowRun {
+  id         String @id @default(uuid()) @db.Uuid
+  workflowId String @db.Uuid
+
+  // What started it (e.g. "scheduler", "api")
+  triggeredBy String
+
+  // First pipelines that did not start, with why: [{ pipelineId, pipelineName, reason }]
+  skipped Json @default("[]")
+
+  // Fixed range the run covered instead of the steps' own windows: { periodType, start, end }
+  period Json?
+
+  createdAt DateTime @default(now())
+
+  workflow   Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  executions PipelineExecution[]
+  mergeRuns  MergeRun[]
+
+  @@index([workflowId, createdAt])
+  @@map("workflow_runs")
+}
