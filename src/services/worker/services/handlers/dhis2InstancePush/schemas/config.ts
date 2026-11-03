@@ -53,67 +53,97 @@ export const pushSourceSchema = z.enum(["raw", "analytics"]);
 
 export type PushSource = z.infer<typeof pushSourceSchema>;
 
-export const dhis2InstancePushConfigSchema = z
-  .object({
-    routeCode: z.string().regex(SOURCE_ROUTE_CODE_PATTERN, {
-      message: "Pick a connected instance (route code starting with caps-src-)",
-    }),
-    items: z
-      .array(pushItemSchema)
-      .min(1)
-      .superRefine((items, ctx) => {
-        const seenFrom = new Set<string>();
-        const seenInto = new Set<string>();
-        items.forEach((item, index) => {
-          if (seenFrom.has(item.from)) {
-            ctx.addIssue({
-              code: "custom",
-              path: [index, "from"],
-              message: "Each staging data element may only be listed once",
-            });
-          }
-          seenFrom.add(item.from);
-          const target = pushItemTarget(item);
-          if (seenInto.has(target)) {
-            ctx.addIssue({
-              code: "custom",
-              path: [index, "into"],
-              message: "Two items write into the same target data element",
-            });
-          }
-          seenInto.add(target);
+const pushItemsSchema = z
+  .array(pushItemSchema)
+  .min(1)
+  .superRefine((items, ctx) => {
+    const seenFrom = new Set<string>();
+    const seenInto = new Set<string>();
+    items.forEach((item, index) => {
+      if (seenFrom.has(item.from)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "from"],
+          message: "Each staging data element may only be listed once",
         });
-      }),
-    source: pushSourceSchema.default("raw"),
-    /** Staging org units whose values are sent. */
-    orgUnit: orgUnitConfigSchema,
-    /** How staging org units are found on the target: by the same ID or the same code. */
-    orgUnitMatch: z.enum(["id", "code"]).default("id"),
-    period: pushPeriodSchema,
-    importStrategy: dataValueImportStrategySchema.default("CREATE_AND_UPDATE"),
-    chunk: z
-      .object({
-        /** Org units per read from staging. */
-        orgUnits: z.number().int().min(1).max(500).default(50),
-        /** Periods per analytics read from staging (analytics source only). */
-        periods: z.number().int().min(1).max(60).default(12),
-        /** Data values per request to the target; each must finish within the route's timeout. */
-        values: z.number().int().min(100).max(10_000).default(2_000),
-      })
-      .default({ orgUnits: 50, periods: 12, values: 2_000 }),
-  })
+      }
+      seenFrom.add(item.from);
+      const target = pushItemTarget(item);
+      if (seenInto.has(target)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "into"],
+          message: "Two items write into the same target data element",
+        });
+      }
+      seenInto.add(target);
+    });
+  });
+
+const pushConfigFields = {
+  routeCode: z.string().regex(SOURCE_ROUTE_CODE_PATTERN, {
+    message: "Pick a connected instance (route code starting with caps-src-)",
+  }),
+  items: pushItemsSchema.optional(),
+  /** Staging data elements to push, as the instance's mappings say where each goes. */
+  mapped: z
+    .array(uidSchema)
+    .min(1)
+    .refine((ids) => new Set(ids).size === ids.length, "Each data element may only be listed once")
+    .optional(),
+  source: pushSourceSchema.default("raw"),
+  /** Staging org units whose values are sent. */
+  orgUnit: orgUnitConfigSchema,
+  orgUnitMatch: z.enum(["id", "code"]).default("id"),
+  period: pushPeriodSchema,
+  importStrategy: dataValueImportStrategySchema.default("CREATE_AND_UPDATE"),
+  chunk: z
+    .object({
+      /** Org units per read from staging. */
+      orgUnits: z.number().int().min(1).max(500).default(50),
+      /** Periods per analytics read from staging (analytics source only). */
+      periods: z.number().int().min(1).max(60).default(12),
+      /** Data values per request to the target; each must finish within the route's timeout. */
+      values: z.number().int().min(100).max(10_000).default(2_000),
+    })
+    .default({ orgUnits: 50, periods: 12, values: 2_000 }),
+};
+
+function checkPushConfig(config: { source: PushSource; period: PushPeriod }, ctx: z.RefinementCtx) {
+  if (config.source === "analytics" && config.period.mode === "updated") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["period", "mode"],
+      message:
+        "Analytics can't be read by last update; pick latest periods or a fixed range, or read raw data",
+    });
+  }
+}
+
+/**
+ * A step either lists its items (older steps), or names `mapped` staging data elements and the
+ * engine fills in `items` and `orgUnitMatch` from the instance before the step runs
+ * (`resolveInstanceMappings`).
+ */
+export const dhis2InstancePushConfigSchema = z
+  .object(pushConfigFields)
   .superRefine((config, ctx) => {
-    if (config.source === "analytics" && config.period.mode === "updated") {
+    checkPushConfig(config, ctx);
+    if ((config.items === undefined) === (config.mapped === undefined)) {
       ctx.addIssue({
         code: "custom",
-        path: ["period", "mode"],
-        message:
-          "Analytics can't be read by last update; pick latest periods or a fixed range, or read raw data",
+        path: ["mapped"],
+        message: "Pick the mapped data elements to push",
       });
     }
   });
 
-export type Dhis2InstancePushConfig = z.infer<typeof dhis2InstancePushConfigSchema>;
+/** What the handler runs: items are always there by then. */
+export const resolvedPushConfigSchema = z
+  .object({ ...pushConfigFields, items: pushItemsSchema })
+  .superRefine(checkPushConfig);
+
+export type Dhis2InstancePushConfig = z.infer<typeof resolvedPushConfigSchema>;
 
 /**
  * A run may replace the period, e.g. with a fixed range to backfill history. Without one the

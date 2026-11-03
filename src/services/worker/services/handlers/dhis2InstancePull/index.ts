@@ -15,7 +15,7 @@ import { analyticsUpTo, type AnalyticsSystemInfo } from "@/shared/utils/sourceAn
 import { resolveOrgUnitsWithTask } from "@/services/worker/utils/orgUnitSelection.ts";
 import { uniqueDataValueSetFilename } from "@/services/worker/utils/dataValueSetFile.ts";
 import {
-  dhis2InstancePullConfigSchema,
+  resolvedPullConfigSchema,
   pullItemTarget,
   type Dhis2InstancePullConfig,
 } from "./schemas/config.ts";
@@ -344,7 +344,7 @@ async function runPreflight(
  */
 export const dhis2InstancePull: StepHandler = {
   async execute(ctx) {
-    const parsed = dhis2InstancePullConfigSchema.safeParse(ctx.handlerConfig);
+    const parsed = resolvedPullConfigSchema.safeParse(ctx.handlerConfig);
     if (!parsed.success) {
       throw new Error(`Invalid dhis2-instance-pull handlerConfig: ${parsed.error.message}`);
     }

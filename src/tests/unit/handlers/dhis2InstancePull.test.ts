@@ -336,6 +336,23 @@ describe("dhis2InstancePullConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("takes mapped staging data elements instead of items", () => {
+    const rest: Record<string, unknown> = baseConfig();
+    delete rest.items;
+    expect(dhis2InstancePullConfigSchema.safeParse({ ...rest, mapped: [CASES] }).success).toBe(
+      true
+    );
+  });
+
+  it("wants either items or mapped data elements, not both or neither", () => {
+    const rest: Record<string, unknown> = baseConfig();
+    delete rest.items;
+    expect(dhis2InstancePullConfigSchema.safeParse(rest).success).toBe(false);
+    expect(dhis2InstancePullConfigSchema.safeParse(baseConfig({ mapped: [CASES] })).success).toBe(
+      false
+    );
+  });
+
   it("rejects route codes without the caps-src- prefix", () => {
     expect(dhis2InstancePullConfigSchema.safeParse(baseConfig({ routeCode: "caps" })).success).toBe(
       false

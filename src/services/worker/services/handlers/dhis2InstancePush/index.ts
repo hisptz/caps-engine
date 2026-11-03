@@ -24,7 +24,7 @@ import {
 import { resolvePullPeriods } from "@/services/worker/services/handlers/dhis2InstancePull/utils/periods.ts";
 import { analyticsUpTo, type AnalyticsSystemInfo } from "@/shared/utils/sourceAnalytics.ts";
 import {
-  dhis2InstancePushConfigSchema,
+  resolvedPushConfigSchema,
   type Dhis2InstancePushConfig,
   type PushPeriod,
 } from "./schemas/config.ts";
@@ -401,7 +401,7 @@ async function readStagingValues(
  */
 export const dhis2InstancePush: StepHandler = {
   async execute(ctx) {
-    const parsed = dhis2InstancePushConfigSchema.safeParse(ctx.handlerConfig);
+    const parsed = resolvedPushConfigSchema.safeParse(ctx.handlerConfig);
     if (!parsed.success) {
       throw new Error(`Invalid dhis2-instance-push handlerConfig: ${parsed.error.message}`);
     }

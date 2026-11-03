@@ -73,38 +73,47 @@ export function pullItemTarget(item: PullItem): string {
   return item.into ?? item.from;
 }
 
-export const dhis2InstancePullConfigSchema = z.object({
+const pullItemsSchema = z
+  .array(pullItemSchema)
+  .min(1)
+  .superRefine((items, ctx) => {
+    const seenFrom = new Set<string>();
+    const seenInto = new Set<string>();
+    items.forEach((item, index) => {
+      if (seenFrom.has(item.from)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "from"],
+          message: "Each source item may only be listed once",
+        });
+      }
+      seenFrom.add(item.from);
+      const target = pullItemTarget(item);
+      if (seenInto.has(target)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "into"],
+          message: "Two items write into the same staging data element",
+        });
+      }
+      seenInto.add(target);
+    });
+  });
+
+const pullConfigFields = {
   routeCode: z.string().regex(SOURCE_ROUTE_CODE_PATTERN, {
     message: "Pick a connected instance (route code starting with caps-src-)",
   }),
-  items: z
-    .array(pullItemSchema)
+  items: pullItemsSchema.optional(),
+  /** Staging data elements to pull, as the instance's mappings say where each comes from. */
+  mapped: z
+    .array(uidSchema)
     .min(1)
-    .superRefine((items, ctx) => {
-      const seenFrom = new Set<string>();
-      const seenInto = new Set<string>();
-      items.forEach((item, index) => {
-        if (seenFrom.has(item.from)) {
-          ctx.addIssue({
-            code: "custom",
-            path: [index, "from"],
-            message: "Each source item may only be listed once",
-          });
-        }
-        seenFrom.add(item.from);
-        const target = pullItemTarget(item);
-        if (seenInto.has(target)) {
-          ctx.addIssue({
-            code: "custom",
-            path: [index, "into"],
-            message: "Two items write into the same staging data element",
-          });
-        }
-        seenInto.add(target);
-      });
-    }),
-  orgUnit: orgUnitConfigSchema,
+    .refine((ids) => new Set(ids).size === ids.length, "Each data element may only be listed once")
+    .optional(),
+  /** Replaced by the connected instance's setting when it has one (`resolveInstanceMappings`). */
   orgUnitMatch: z.enum(["id", "code"]).default("id"),
+  orgUnit: orgUnitConfigSchema,
   period: pullPeriodSchema,
   chunk: z
     .object({
@@ -112,9 +121,32 @@ export const dhis2InstancePullConfigSchema = z.object({
       orgUnits: z.number().int().min(1).max(500).default(50),
     })
     .default({ periods: 12, orgUnits: 50 }),
+};
+
+/**
+ * A step either lists its items (older steps), or names `mapped` staging data elements and the
+ * engine fills in `items` and `orgUnitMatch` from the instance before the step runs
+ * (`resolveInstanceMappings`).
+ */
+export const dhis2InstancePullConfigSchema = z
+  .object(pullConfigFields)
+  .superRefine((config, ctx) => {
+    if ((config.items === undefined) === (config.mapped === undefined)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["mapped"],
+        message: "Pick the mapped data elements to pull",
+      });
+    }
+  });
+
+/** What the handler runs: items are always there by then. */
+export const resolvedPullConfigSchema = z.object({
+  ...pullConfigFields,
+  items: pullItemsSchema,
 });
 
-export type Dhis2InstancePullConfig = z.infer<typeof dhis2InstancePullConfigSchema>;
+export type Dhis2InstancePullConfig = z.infer<typeof resolvedPullConfigSchema>;
 
 /**
  * A run may replace the period, e.g. with a fixed range to backfill history. Without one the

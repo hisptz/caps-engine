@@ -96,3 +96,19 @@ enum MergeRunStatus {
   TIMED_OUT
   CANCELLED
 }
+
+enum OrgUnitMatch {
+  ID
+  CODE
+}
+
+enum MappingDirection {
+  PULL
+  PUSH
+}
+
+enum RemoteItemType {
+  DATA_ELEMENT
+  INDICATOR
+  PROGRAM_INDICATOR
+}

@@ -58,6 +58,10 @@ export const ApiErrorCode = {
 
   SOURCE_ROUTE_UNAVAILABLE: "source_route_unavailable",
 
+  INSTANCE_MAPPING_INVALID: "instance_mapping_invalid",
+  INSTANCE_MAPPING_CONFLICT: "instance_mapping_conflict",
+  INSTANCE_MAPPING_IN_USE: "instance_mapping_in_use",
+
   SYSTEM_INFO_UNAVAILABLE: "system_info_unavailable",
 } as const;
 
