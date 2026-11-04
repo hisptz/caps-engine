@@ -1,3 +1,9 @@
+# [3.2.0](https://github.com/hisptz/caps-engine/compare/v3.1.2...v3.2.0) (2026-11-04)
+
+### Features
+
+- support for composable pipelines ([0f05ed9](https://github.com/hisptz/caps-engine/commit/0f05ed9ea1f31bfdb6dae89e726417084f124fef))
+
 ## [3.1.2](https://github.com/hisptz/caps-engine/compare/v3.1.1...v3.1.2) (2026-10-28)
 
 ### Bug Fixes
