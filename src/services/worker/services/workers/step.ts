@@ -16,6 +16,7 @@ import {
 import type { InputJsonValue } from "@prisma/client/runtime/client";
 import { createTaskReporter, errorColumns } from "@/services/worker/services/runners/step.ts";
 import { resolveEffectiveHandlerConfig } from "@/services/worker/utils/resolveEffectiveHandlerConfig.ts";
+import { resolveInstanceMappings } from "@/services/worker/utils/resolveInstanceMappings.ts";
 import {
   parseStepSnapshot,
   pipelineStepFromSnapshot,
@@ -114,12 +115,16 @@ export class StepWorker {
       const handler = resolveHandler(step.handlerKey);
       const tasks = createTaskReporter(prisma, stepExecution);
 
-      const handlerConfig = resolveEffectiveHandlerConfig({
-        handlerKey: step.handlerKey,
-        handlerConfig: step.handlerConfig as Record<string, unknown> | null,
-        pipelineContext: context,
-        stepId: step.id,
-      });
+      const handlerConfig = await resolveInstanceMappings(
+        prisma,
+        step.handlerKey,
+        resolveEffectiveHandlerConfig({
+          handlerKey: step.handlerKey,
+          handlerConfig: step.handlerConfig as Record<string, unknown> | null,
+          pipelineContext: context,
+          stepId: step.id,
+        })
+      );
 
       const ctx = {
         step,

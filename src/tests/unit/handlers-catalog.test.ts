@@ -18,7 +18,7 @@ import { dhis2AnalyticsRunConfigSchema } from "@/services/worker/services/handle
 describe("handler catalog", () => {
   it("lists all registered handlers with display metadata", () => {
     const handlers = listHandlerDescriptors();
-    expect(handlers).toHaveLength(15);
+    expect(handlers).toHaveLength(16);
     const keys = handlers.map((h) => h.key).sort();
     expect(keys).toEqual(
       [
@@ -28,6 +28,7 @@ describe("handler catalog", () => {
         "climate-openeo-download",
         "climate-openeo-poll",
         "dhis2-analytics-run",
+        "dhis2-data-check",
         "dhis2-data-upload",
         "dhis2-instance-pull",
         "dhis2-instance-push",
@@ -59,6 +60,24 @@ describe("handler catalog", () => {
     expect(d?.tags).toEqual(["dhis2", "pull"]);
     expect(d?.schemas?.config).toBeDefined();
     expect(d?.schemas?.context).toBeDefined();
+  });
+
+  it("describes every handler's result for connector conditions", () => {
+    for (const descriptor of listHandlerDescriptors()) {
+      const { outputs } = descriptor;
+      if ("passThrough" in outputs) {
+        continue;
+      }
+      const keys = outputs.fields.map((field) => field.key);
+      expect(new Set(keys).size, `${descriptor.key} has duplicate output keys`).toBe(keys.length);
+      for (const field of outputs.fields) {
+        expect(field.type, `${descriptor.key}.${field.key}`).toBe("number");
+      }
+    }
+    expect(getHandlerDescriptor("dhis2-notify")?.outputs).toEqual({ passThrough: true });
+    expect(getHandlerDescriptor("alert-generation")?.outputs).toEqual({
+      fields: [{ key: "count", label: "Alerts raised", type: "number" }],
+    });
   });
 
   it("isKnownHandlerKey accepts registry keys only", () => {

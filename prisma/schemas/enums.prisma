@@ -66,3 +66,49 @@ enum OutboxDeliveryStatus {
   PUBLISHED
   FAILED
 }
+
+enum ConnectorTriggerOn {
+  COMPLETED
+  FAILED
+  FINISHED
+}
+
+enum ConnectorRunStatus {
+  WAITING
+  FIRED
+  NOT_MET
+  SKIPPED
+  FAILED
+  CANCELLED
+}
+
+enum MergeTriggerRule {
+  ALL_SUCCEEDED
+  ALL_DONE
+}
+
+enum MergeRunStatus {
+  WAITING
+  FIRED
+  NOT_MET
+  SKIPPED
+  FAILED
+  TIMED_OUT
+  CANCELLED
+}
+
+enum OrgUnitMatch {
+  ID
+  CODE
+}
+
+enum MappingDirection {
+  PULL
+  PUSH
+}
+
+enum RemoteItemType {
+  DATA_ELEMENT
+  INDICATOR
+  PROGRAM_INDICATOR
+}

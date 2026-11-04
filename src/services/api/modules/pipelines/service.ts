@@ -1,6 +1,10 @@
 import { Prisma } from "@db/client";
 import { apiDb } from "@/services/api/utils/db.ts";
-import { PipelineQueries, ActiveExecutionError } from "@/services/api/utils/pipeline/queries.ts";
+import {
+  PipelineQueries,
+  ActiveExecutionError,
+  IncomingConnectorsError,
+} from "@/services/api/utils/pipeline/queries.ts";
 import { validateStepHandlerInput } from "@/services/api/utils/pipeline/stepValidation.ts";
 import { validatePipelineInputContext } from "@/services/api/utils/pipeline/inputContextValidation.ts";
 import { ApiError, conflict, notFound } from "@/shared/api/errors.ts";
@@ -9,6 +13,7 @@ import type {
   ListPipelinesQuery,
   CreatePipelineBody,
   UpdatePipelineBody,
+  DuplicatePipelineBody,
   CreateStepBody,
   UpdateStepBody,
   CreateScheduleBody,
@@ -76,12 +81,35 @@ export class PipelineService {
     }
   }
 
+  async duplicatePipeline(id: string, body: DuplicatePipelineBody) {
+    try {
+      const copy = await this.queries.duplicatePipeline(id, body.name);
+      return await this.queries.getPipeline(copy.id);
+    } catch (err) {
+      if (isPrismaNotFound(err)) {
+        throw notFound("Pipeline not found", ApiErrorCode.PIPELINE_NOT_FOUND);
+      }
+      if (isPrismaDuplicate(err)) {
+        throw conflict(
+          "A pipeline with that name already exists",
+          ApiErrorCode.PIPELINE_DUPLICATE_NAME
+        );
+      }
+      throw err;
+    }
+  }
+
   async deletePipeline(id: string) {
     try {
       return await this.queries.deletePipeline(id);
     } catch (err) {
       if (err instanceof ActiveExecutionError) {
         throw conflict(err.message, ApiErrorCode.PIPELINE_HAS_ACTIVE_EXECUTIONS);
+      }
+      if (err instanceof IncomingConnectorsError) {
+        throw conflict(err.message, ApiErrorCode.PIPELINE_HAS_INCOMING_CONNECTORS, {
+          connectors: err.connectors,
+        });
       }
       if (isPrismaNotFound(err)) {
         throw notFound("Pipeline not found", ApiErrorCode.PIPELINE_NOT_FOUND);

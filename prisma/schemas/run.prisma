@@ -18,8 +18,14 @@ model PipelineExecution {
   // Cursor: which step are we currently on
   currentStepIndex Int @default(0)
 
-  // What triggered this execution (e.g. "schedule", "api", "manual")
+  // What triggered this execution (e.g. "schedule", "api", "manual", "connector")
   triggeredBy String?
+
+  // How many connectors led to this execution (0 = started directly); caps runaway chains
+  chainDepth Int @default(0)
+
+  // The workflow run this execution is part of; null = started on its own
+  workflowRunId String? @db.Uuid
 
   startedAt  DateTime?
   finishedAt DateTime?
@@ -28,12 +34,22 @@ model PipelineExecution {
 
   pipeline       Pipeline           @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   schedule       PipelineSchedule?  @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  workflowRun    WorkflowRun?       @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
   stepExecutions StepExecution[]
   retryCommands  StepRetryCommand[]
   logs           ExecutionLog[]
 
+  // Connector runs this execution created when it finished, and the one that started it
+  outgoingConnectorRuns ConnectorRun[] @relation("ConnectorRunSource")
+  incomingConnectorRun  ConnectorRun?  @relation("ConnectorRunTarget")
+
+  // Merges this execution counted towards, and the merge run that started it
+  mergeArrivals    MergeArrival[] @relation("MergeArrivals")
+  incomingMergeRun MergeRun?      @relation("MergeRunTarget")
+
   @@index([pipelineId])
   @@index([scheduleId])
+  @@index([workflowRunId])
   @@index([status])
   @@index([createdAt])
   @@map("pipeline_executions")
@@ -73,11 +89,11 @@ model StepExecution {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  execution      PipelineExecution  @relation(fields: [executionId], references: [id], onDelete: Cascade)
-  step           PipelineStep       @relation(fields: [stepId], references: [id], onDelete: Cascade)
-  taskExecutions TaskExecution[]
-  logs           ExecutionLog[]
-  retrySource    StepRetryCommand?  @relation("RetrySourceAttempt")
+  execution        PipelineExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  step             PipelineStep      @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  taskExecutions   TaskExecution[]
+  logs             ExecutionLog[]
+  retrySource      StepRetryCommand? @relation("RetrySourceAttempt")
   retryReplacement StepRetryCommand? @relation("RetryReplacementAttempt")
 
   @@unique([executionId, stepId, attemptNumber])

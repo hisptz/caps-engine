@@ -1,0 +1,48 @@
+// ============================================================
+// MAPPING CLUSTER
+// Pairs of staging data elements and items on a connected instance
+// (a caps-src- route on staging). Mappings belong to the instance, not
+// to steps: pull and push steps only pick which mapped ones they move.
+// ============================================================
+
+// Settings of one connected instance. The route itself (URL, credentials) lives in DHIS2.
+model ConnectedInstance {
+  // The DHIS2 route code (caps-src-…), as steps reference it
+  routeCode String @id
+
+  // How staging org units are found on the instance: same ID, or same code
+  orgUnitMatch OrgUnitMatch @default(ID)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mappings InstanceMapping[]
+
+  @@map("connected_instances")
+}
+
+// A staging data element paired with an item on a connected instance. PULL: values come from
+// the instance into staging. PUSH: values go from staging to the instance.
+model InstanceMapping {
+  id String @id @default(uuid()) @db.Uuid
+
+  routeCode          String
+  direction          MappingDirection
+  remoteItem         String
+  remoteItemType     RemoteItemType
+  stagingDataElement String
+
+  // = stagingDataElement for PULL, null for PUSH. Unique, so only one instance can pull into a
+  // staging data element; several can receive it.
+  pullTarget String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  instance ConnectedInstance @relation(fields: [routeCode], references: [routeCode], onDelete: Cascade)
+
+  // Within one instance, each staging data element and each remote item is paired once
+  @@unique([routeCode, stagingDataElement])
+  @@unique([routeCode, remoteItem])
+  @@map("instance_mappings")
+}

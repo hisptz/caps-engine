@@ -20,6 +20,7 @@ import { tracer, stepExecutionCounter, stepDurationHistogram } from "@/shared/te
 import { logger } from "@/shared/utils";
 import { toErrorRecord } from "@/shared/utils/error.ts";
 import { resolveEffectiveHandlerConfig } from "@/services/worker/utils/resolveEffectiveHandlerConfig.ts";
+import { resolveInstanceMappings } from "@/services/worker/utils/resolveInstanceMappings.ts";
 import {
   parseStepSnapshot,
   pipelineStepFromSnapshot,
@@ -268,12 +269,16 @@ export class StepRunner {
       try {
         const handler = resolveHandler(step.handlerKey);
         const pipelineContext = execution.context as Record<string, unknown>;
-        const handlerConfig = resolveEffectiveHandlerConfig({
-          handlerKey: step.handlerKey,
-          handlerConfig: step.handlerConfig as Record<string, unknown> | null,
-          pipelineContext,
-          stepId: step.id,
-        });
+        const handlerConfig = await resolveInstanceMappings(
+          prisma,
+          step.handlerKey,
+          resolveEffectiveHandlerConfig({
+            handlerKey: step.handlerKey,
+            handlerConfig: step.handlerConfig as Record<string, unknown> | null,
+            pipelineContext,
+            stepId: step.id,
+          })
+        );
 
         const pipeline = await prisma.pipeline.findUnique({
           where: { id: execution.pipelineId },

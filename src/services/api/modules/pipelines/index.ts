@@ -6,6 +6,7 @@ import {
   listPipelinesQuery,
   createPipelineBody,
   updatePipelineBody,
+  duplicatePipelineBody,
   createStepBody,
   updateStepBody,
   createScheduleBody,
@@ -72,15 +73,38 @@ export const pipelinesModule = new Elysia({ prefix: "/pipelines", tags: ["Pipeli
     params: idParams,
     detail: {
       summary: "Delete pipeline",
-      description: "Delete a pipeline definition. Fails if active executions exist.",
+      description:
+        "Delete a pipeline definition. Fails if active executions exist or connectors from other pipelines start it.",
       operationId: "deletePipeline",
       responses: {
         "200": { description: "Deleted pipeline" },
         "404": { description: "Pipeline not found" },
-        "409": { description: "Pipeline has active executions" },
+        "409": { description: "Pipeline has active executions or incoming connectors" },
       },
     },
   })
+  .post(
+    "/:id/duplicate",
+    ({ params, body, set }) => {
+      set.status = 201;
+      return pipelineService.duplicatePipeline(params.id, body);
+    },
+    {
+      params: idParams,
+      body: duplicatePipelineBody,
+      detail: {
+        summary: "Duplicate pipeline",
+        description:
+          "Copy a pipeline and its steps under a new name. Schedules, connectors and its workflow are not copied.",
+        operationId: "duplicatePipeline",
+        responses: {
+          "201": { description: "The copy, with its steps" },
+          "404": { description: "Pipeline not found" },
+          "409": { description: "A pipeline with that name already exists" },
+        },
+      },
+    }
+  )
   .get("/:id/steps", ({ params }) => pipelineService.listSteps(params.id), {
     params: idParams,
     detail: {

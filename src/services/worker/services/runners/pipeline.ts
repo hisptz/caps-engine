@@ -14,6 +14,8 @@ import { tracer, pipelineExecutionCounter } from "@/shared/telemetry/index.ts";
 import { resolveStepQueueName } from "@/shared/handlers/catalog.ts";
 import { logger } from "@/shared/utils";
 import { enqueueOutboxMessage } from "@/shared/pipeline/outbox.ts";
+import { finishExecution } from "@/shared/pipeline/finishExecution.ts";
+import { withStepOutput } from "@/shared/pipeline/stepOutputs.ts";
 import { snapshotFromPipelineStep } from "@/shared/pipeline/stepSnapshot.ts";
 import { notifyPipelineFailure } from "@/services/worker/utils/notifications.ts";
 
@@ -132,10 +134,13 @@ export class PipelineCoordinator {
 
     // All steps done
     if (stepIndex >= steps.length) {
-      await prisma.pipelineExecution.update({
-        where: { id: executionId },
-        data: { status: PipelineExecutionStatus.COMPLETED, finishedAt: new Date() },
-      });
+      await prisma.$transaction((tx) =>
+        finishExecution(tx, {
+          executionId,
+          pipelineId: execution.pipelineId,
+          status: PipelineExecutionStatus.COMPLETED,
+        })
+      );
       await this.log(executionId, "INFO", `Pipeline completed: ${execution.pipeline.name}`);
       logger.info(
         `[coordinator] Pipeline completed executionId=${executionId} pipeline="${execution.pipeline.name}"`
@@ -213,7 +218,7 @@ export class PipelineCoordinator {
         await this.failExecution(executionId, execution.pipeline, step.name, result.error?.message);
         return;
       }
-      await this.finishInlineSuccess(executionId, stepIndex, result.output, context);
+      await this.finishInlineSuccess(executionId, stepIndex, step.id, result.output, context);
       return;
     }
 
@@ -263,12 +268,13 @@ export class PipelineCoordinator {
       return;
     }
 
-    await this.finishInlineSuccess(executionId, stepIndex, stepOutput, context);
+    await this.finishInlineSuccess(executionId, stepIndex, step.id, stepOutput, context);
   }
 
   private async finishInlineSuccess(
     executionId: string,
     stepIndex: number,
+    stepId: string,
     stepOutput: unknown,
     context: Record<string, unknown>
   ): Promise<void> {
@@ -289,13 +295,13 @@ export class PipelineCoordinator {
     logger.info(
       `[coordinator] Cursor advanced executionId=${executionId} completedStepIndex=${stepIndex} nextStepIndex=${stepIndex + 1}`
     );
-    await this.advanceCursor(executionId, stepIndex, stepOutput, context);
+    await this.advanceCursor(executionId, stepIndex, stepId, stepOutput, context);
     await this.enqueuePipelineWake(executionId);
   }
 
   private async failExecution(
     executionId: string,
-    pipeline: { name: string; config: unknown },
+    pipeline: { id: string; name: string; config: unknown },
     stepName: string,
     errorMessage?: string
   ): Promise<void> {
@@ -304,10 +310,13 @@ export class PipelineCoordinator {
     logger.error(
       `[coordinator] Inline step exhausted retries executionId=${executionId} step="${stepName}"`
     );
-    await this.deps.prisma.pipelineExecution.update({
-      where: { id: executionId },
-      data: { status: PipelineExecutionStatus.FAILED, finishedAt: new Date() },
-    });
+    await this.deps.prisma.$transaction((tx) =>
+      finishExecution(tx, {
+        executionId,
+        pipelineId: pipeline.id,
+        status: PipelineExecutionStatus.FAILED,
+      })
+    );
     pipelineExecutionCounter.add(1, {
       "caps.pipeline.name": pipelineName,
       outcome: "failed",
@@ -436,10 +445,13 @@ export class PipelineCoordinator {
       logger.error(
         `[coordinator] Queued step ${reason} executionId=${executionId} step="${step.name}" error="${errorMessage ?? ""}"`
       );
-      await prisma.pipelineExecution.update({
-        where: { id: executionId },
-        data: { status: PipelineExecutionStatus.FAILED, finishedAt: new Date() },
-      });
+      await prisma.$transaction((tx) =>
+        finishExecution(tx, {
+          executionId,
+          pipelineId: execution.pipelineId,
+          status: PipelineExecutionStatus.FAILED,
+        })
+      );
       pipelineExecutionCounter.add(1, {
         "caps.pipeline.name": execution.pipeline.name,
         outcome: "failed",
@@ -457,7 +469,7 @@ export class PipelineCoordinator {
     logger.info(
       `[coordinator] Queued step succeeded, cursor advanced executionId=${executionId} completedStepIndex=${execution.currentStepIndex}`
     );
-    await this.advanceCursor(executionId, execution.currentStepIndex, output, context);
+    await this.advanceCursor(executionId, execution.currentStepIndex, step.id, output, context);
     const afterQueued = await prisma.pipelineExecution.findUniqueOrThrow({
       where: { id: executionId },
       select: { status: true },
@@ -477,6 +489,7 @@ export class PipelineCoordinator {
   private async advanceCursor(
     executionId: string,
     stepIndex: number,
+    stepId: string,
     output: unknown,
     context: Record<string, unknown>
   ): Promise<void> {
@@ -485,10 +498,7 @@ export class PipelineCoordinator {
       data: {
         currentStepIndex: stepIndex + 1,
         status: PipelineExecutionStatus.RUNNING,
-        context: {
-          ...context,
-          [`step_${stepIndex}_output`]: output ?? null,
-        } as InputJsonValue,
+        context: withStepOutput(context, stepIndex, stepId, output) as InputJsonValue,
       },
     });
   }

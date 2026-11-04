@@ -12,12 +12,17 @@ import { rateLimiter } from "@/services/api/plugins/rate-limiter.ts";
 import { errorHandler } from "@/shared/api/errors.ts";
 import { pipelinesModule } from "@/services/api/modules/pipelines/index.ts";
 import { schedulesModule } from "@/services/api/modules/schedules/index.ts";
+import { connectorsModule } from "@/services/api/modules/connectors/index.ts";
+import { workflowsModule } from "@/services/api/modules/workflows/index.ts";
+import { mergesModule } from "@/services/api/modules/merges/index.ts";
+import { templatesModule } from "@/services/api/modules/templates/index.ts";
 import { climateModule } from "@/services/api/modules/climate/index.ts";
 import { monitoringModule } from "@/services/api/modules/monitoring/index.ts";
 import { handlersModule } from "@/services/api/modules/handlers/index.ts";
 import { evaluationsModule } from "@/services/api/modules/evaluations/index.ts";
 import { systemModule } from "@/services/api/modules/system/index.ts";
 import { sourceRoutesModule } from "@/services/api/modules/sourceRoutes/index.ts";
+import { instancesModule } from "@/services/api/modules/instances/index.ts";
 
 initializeApiDb();
 serviceLogger.info(ServiceType.API, `Initializing API server`);
@@ -49,12 +54,17 @@ const app = new Elysia()
   .onError(errorHandler)
   .use(pipelinesModule)
   .use(schedulesModule)
+  .use(connectorsModule)
+  .use(workflowsModule)
+  .use(mergesModule)
+  .use(templatesModule)
   .use(climateModule)
   .use(monitoringModule)
   .use(handlersModule)
   .use(evaluationsModule)
   .use(systemModule)
-  .use(sourceRoutesModule);
+  .use(sourceRoutesModule)
+  .use(instancesModule);
 
 await printBanner("CAPS API");
 const port = Number(env.PORT) || 4000;

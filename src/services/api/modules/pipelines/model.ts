@@ -34,6 +34,12 @@ export const updatePipelineBody = z.object({
   concurrencyPolicy: z.enum(ConcurrencyPolicy).optional(),
 });
 
+export const duplicatePipelineBody = z
+  .object({
+    name: z.string().min(1).max(255),
+  })
+  .strict();
+
 export const createStepBody = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
@@ -68,6 +74,7 @@ export const createScheduleBody = z
 export type ListPipelinesQuery = z.infer<typeof listPipelinesQuery>;
 export type CreatePipelineBody = z.infer<typeof createPipelineBody>;
 export type UpdatePipelineBody = z.infer<typeof updatePipelineBody>;
+export type DuplicatePipelineBody = z.infer<typeof duplicatePipelineBody>;
 export type CreateStepBody = z.infer<typeof createStepBody>;
 export type UpdateStepBody = z.infer<typeof updateStepBody>;
 export type CreateScheduleBody = z.infer<typeof createScheduleBody>;

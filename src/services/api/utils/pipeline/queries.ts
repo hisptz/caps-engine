@@ -27,7 +27,10 @@ export class PipelineQueries {
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * pageSize,
         take: pageSize,
-        include: { _count: { select: { steps: true, executions: true, schedules: true } } },
+        include: {
+          _count: { select: { steps: true, executions: true, schedules: true } },
+          workflow: { select: { id: true, name: true } },
+        },
       }),
       this.prisma.pipeline.count({ where }),
     ]);
@@ -44,7 +47,39 @@ export class PipelineQueries {
       include: {
         steps: { orderBy: { stepOrder: "asc" } },
         schedules: { orderBy: { createdAt: "asc" } },
+        workflow: { select: { id: true, name: true } },
       },
+    });
+  }
+
+  /** Copy a pipeline and its steps under a new name; schedules, connectors and workflow stay behind. */
+  async duplicatePipeline(id: string, name: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const source = await tx.pipeline.findUniqueOrThrow({
+        where: { id },
+        include: { steps: { orderBy: { stepOrder: "asc" } } },
+      });
+      return tx.pipeline.create({
+        data: {
+          name,
+          description: source.description,
+          config: source.config as Prisma.InputJsonValue,
+          isActive: source.isActive,
+          concurrencyPolicy: source.concurrencyPolicy,
+          steps: {
+            create: source.steps.map((step) => ({
+              name: step.name,
+              description: step.description,
+              handlerKey: step.handlerKey,
+              stepOrder: step.stepOrder,
+              maxRetries: step.maxRetries,
+              retryDelayMs: step.retryDelayMs,
+              inputSchema: step.inputSchema ?? Prisma.DbNull,
+              handlerConfig: step.handlerConfig as Prisma.InputJsonValue,
+            })),
+          },
+        },
+      });
     });
   }
 
@@ -100,6 +135,30 @@ export class PipelineQueries {
       if (activeCount > 0) {
         throw new ActiveExecutionError(
           `Cannot delete pipeline: ${activeCount} active execution(s) in progress`
+        );
+      }
+
+      // Connectors from other pipelines would lose their target; the user removes them first
+      const incomingConnectors = await tx.pipelineConnector.findMany({
+        where: {
+          OR: [{ targetPipelineId: id }, { otherwisePipelineId: id }],
+          sourcePipelineId: { not: id },
+        },
+        select: { id: true, name: true, sourcePipeline: { select: { id: true, name: true } } },
+      });
+      if (incomingConnectors.length > 0) {
+        throw new IncomingConnectorsError(
+          `Cannot delete pipeline: ${incomingConnectors.length} connector(s) from other pipelines start it`,
+          incomingConnectors
+        );
+      }
+
+      // A merge would lose the pipeline it starts; the user changes or deletes it first
+      const mergeCount = await tx.pipelineMerge.count({ where: { targetPipelineId: id } });
+      if (mergeCount > 0) {
+        throw new IncomingConnectorsError(
+          `Cannot delete pipeline: ${mergeCount} connector(s) that wait for several pipelines start it`,
+          []
         );
       }
 
@@ -265,5 +324,19 @@ export class ActiveExecutionError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ActiveExecutionError";
+  }
+}
+
+export class IncomingConnectorsError extends Error {
+  constructor(
+    message: string,
+    readonly connectors: {
+      id: string;
+      name: string;
+      sourcePipeline: { id: string; name: string };
+    }[]
+  ) {
+    super(message);
+    this.name = "IncomingConnectorsError";
   }
 }

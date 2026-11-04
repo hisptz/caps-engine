@@ -1,9 +1,16 @@
-import { LogLevel, PipelineExecutionStatus, PrismaClient } from "@db/client";
+import {
+  ConnectorRunStatus,
+  LogLevel,
+  MergeRunStatus,
+  PipelineExecutionStatus,
+  PrismaClient,
+} from "@db/client";
 import type { Channel, ConsumeMessage } from "amqplib";
 import { logger } from "@/shared/utils";
 import type { InputJsonValue } from "@prisma/client/runtime/client";
 import { QUEUES } from "@/services/worker/constants/monitor.ts";
 import { notifyPipelineFailure } from "@/services/worker/utils/notifications.ts";
+import { finishExecution } from "@/shared/pipeline/finishExecution.ts";
 
 // ============================================================
 // Dead message metadata
@@ -87,6 +94,18 @@ export class DlxMonitor {
       await this.markExecutionFailed(executionId, sourceQueue, reason);
     }
 
+    // ConnectorJobMessage carries a connector run id instead
+    const connectorRunId = typeof body.connectorRunId === "string" ? body.connectorRunId : null;
+    if (connectorRunId) {
+      await this.markConnectorRunFailed(connectorRunId, sourceQueue, reason);
+    }
+
+    // A merge decision whose message died would leave its merge run WAITING
+    const mergeRunId = typeof body.mergeRunId === "string" ? body.mergeRunId : null;
+    if (mergeRunId) {
+      await this.markMergeRunFailed(mergeRunId, sourceQueue, reason);
+    }
+
     // Store the dead message for inspection and potential replay
     await this.logDeadMessage({
       executionId,
@@ -95,6 +114,49 @@ export class DlxMonitor {
       body,
       xDeath,
     });
+  }
+
+  private async markMergeRunFailed(
+    mergeRunId: string,
+    sourceQueue: string,
+    reason: string
+  ): Promise<void> {
+    try {
+      await this.prisma.mergeRun.updateMany({
+        where: { id: mergeRunId, status: MergeRunStatus.WAITING },
+        data: {
+          status: MergeRunStatus.FAILED,
+          evaluatedAt: new Date(),
+          reason: `Message dead-lettered from ${sourceQueue} (${reason})`,
+        },
+      });
+      logger.error(`[dlx-monitor] Marked merge run FAILED: ${mergeRunId} (from ${sourceQueue})`);
+    } catch (err) {
+      logger.error(`[dlx-monitor] Failed to mark merge run as failed: ${mergeRunId}`, err);
+    }
+  }
+
+  // A connector run whose message died would otherwise stay WAITING forever
+  private async markConnectorRunFailed(
+    connectorRunId: string,
+    sourceQueue: string,
+    reason: string
+  ): Promise<void> {
+    try {
+      await this.prisma.connectorRun.updateMany({
+        where: { id: connectorRunId, status: ConnectorRunStatus.WAITING },
+        data: {
+          status: ConnectorRunStatus.FAILED,
+          evaluatedAt: new Date(),
+          reason: `Message dead-lettered from ${sourceQueue} (${reason})`,
+        },
+      });
+      logger.error(
+        `[dlx-monitor] Marked connector run FAILED: ${connectorRunId} (from ${sourceQueue})`
+      );
+    } catch (err) {
+      logger.error(`[dlx-monitor] Failed to mark connector run as failed: ${connectorRunId}`, err);
+    }
   }
 
   // Mark the pipeline execution as FAILED so the monitoring
@@ -107,7 +169,7 @@ export class DlxMonitor {
     try {
       const execution = await this.prisma.pipelineExecution.findUnique({
         where: { id: executionId },
-        include: { pipeline: { select: { name: true, config: true } } },
+        include: { pipeline: { select: { id: true, name: true, config: true } } },
       });
 
       if (!execution) return;
@@ -122,13 +184,13 @@ export class DlxMonitor {
 
       if (!activeStatuses.includes(execution.status)) return;
 
-      await this.prisma.pipelineExecution.update({
-        where: { id: executionId },
-        data: {
+      await this.prisma.$transaction((tx) =>
+        finishExecution(tx, {
+          executionId,
+          pipelineId: execution.pipelineId,
           status: PipelineExecutionStatus.FAILED,
-          finishedAt: new Date(),
-        },
-      });
+        })
+      );
 
       await this.prisma.executionLog.create({
         data: {
@@ -162,8 +224,6 @@ export class DlxMonitor {
     xDeath?: XDeath;
   }): Promise<void> {
     // For now we log to execution_logs if we have an executionId.
-    // You could also write to a dedicated dead_letters table for
-    // full replay support with message body storage.
     if (!details.executionId) {
       logger.warn("[dlx-monitor] Dead message with no executionId:", details);
       return;

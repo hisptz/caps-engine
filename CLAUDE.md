@@ -73,7 +73,7 @@ Two workers run by default (`worker-1`, `worker-2`) — they are stateless and s
 | `bun run db:seed`     | Seed example pipelines/data            |
 | `bun run db:reset`    | Reset database (dev only, destructive) |
 
-Prisma schemas are split by concern under `prisma/schemas/`: `pipeline.prisma`, `run.prisma`, `log.prisma`, `schedule.prisma`, `enums.prisma`, `schema.prisma`. Generated client is at `prisma/generated/prisma/`.
+Prisma schemas are split by concern under `prisma/schemas/`: `pipeline.prisma`, `run.prisma`, `log.prisma`, `schedule.prisma`, `connector.prisma`, `workflow.prisma`, `merge.prisma`, `enums.prisma`, `schema.prisma`. Generated client is at `prisma/generated/prisma/`.
 
 Tests require a running Postgres and read `DATABASE_URL_TEST` from `.env`; the `caps_test` database must exist beforehand (`make db-shell` → `CREATE DATABASE caps_test;`).
 
@@ -117,6 +117,29 @@ The worker service uses RabbitMQ to coordinate pipeline execution, with a transa
 
 Dead-lettered messages go to `caps.dlx` exchange → `caps.dead-letters` queue. `DlxMonitor` (`services/monitor/monitor.ts`) watches this and marks the corresponding execution as `FAILED`. `services/monitor/topology.ts` is the single source of truth for RabbitMQ queue/exchange declarations.
 
+### Pipeline Connectors
+
+A `PipelineConnector` joins two pipelines: when the source execution finishes (`on`: COMPLETED, FAILED or FINISHED), the connector may start the target pipeline. The source is already finished by then; the decision lives on a `ConnectorRun` (WAITING → FIRED / NOT_MET / SKIPPED / FAILED / CANCELLED), so a connector never keeps its source looking active.
+
+1. **Every** COMPLETED/FAILED transition goes through `finishExecution()` (`src/shared/pipeline/finishExecution.ts`). In the same transaction it creates one `ConnectorRun` per matching active connector (unique per connector and source execution) and queues `pipeline.connectors` through the outbox, delayed by `delayMinutes`. Writing the status directly skips the connectors.
+2. `ConnectorEvaluator` (`services/runners/connector.ts`) consumes `pipeline.connectors`. It evaluates the connector's `condition` — a closed JSONLogic subset (`src/shared/pipeline/rules.ts`) over `{ context, status }` of the source execution — and, when met, starts the target via `startExecution()` (`src/shared/pipeline/startExecution.ts`, which `TriggerService` also uses) in the same transaction that marks the run FIRED. If the rule is not met and the connector has an `otherwisePipelineId`, that pipeline is started instead (run FIRED with `startedOtherwise: true`); otherwise the run ends NOT*MET. An otherwise pipeline requires a condition and must differ from the target. The target's concurrency policy still applies (a refusal ends the run SKIPPED). `inputMapping` copies source context paths into the target's context.
+   Rules reference step results by step id (`context.stepOutputs.<stepId>.<field>`, written by `withStepOutput()` in `src/shared/pipeline/stepOutputs.ts` alongside the positional `step*<n>\_output`), so reordering steps does not change what a rule checks. Each handler declares its result fields in `HANDLERS` (`outputs`), which `GET /handlers`returns for the app's condition picker; keep them in step with what`execute` returns.
+3. Guardrails: the API rejects connectors that would close a loop; executions carry `chainDepth` and connectors stop at `MAX_CONNECTOR_CHAIN_DEPTH`; a pipeline that other pipelines' connectors start cannot be deleted.
+
+### Workflows
+
+A `Workflow` frames several pipelines (a pipeline is in at most one, `Pipeline.workflowId`) and has its own start: an optional `cronExpr` on the workflow (the scheduler loads it next to pipeline schedules, woken by the `workflows` NOTIFY trigger) or `POST /workflows/:id/run`. `startWorkflow()` (`src/shared/pipeline/workflows.ts`) creates one `WorkflowRun` and starts the workflow's first pipelines — members no active connector from another member starts — with `triggeredBy: "workflow"`. Every execution in the run carries `workflowRunId`; the connector evaluator passes the source's run on, and `startExecution()` keeps it only when the target is in that workflow. A run's status is derived on read (`deriveWorkflowRunStatus`): RUNNING while an execution is active or a connector run is WAITING, then FAILED / CANCELLED / COMPLETED, or SKIPPED when nothing started. A `PipelineMerge` (inside one workflow) waits for two or more source pipelines of a workflow run, then starts its target (`triggeredBy: "merge"`). `finishExecution()` records a `MergeArrival` for every active merge of the execution's workflow that lists its pipeline; the first arrival opens the `MergeRun` (unique per merge and workflow run) and queues its deadline (`timeoutMinutes`), and every arrival queues a decision. Merge messages share `pipeline.connectors` (`{ mergeRunId }`); `MergeEvaluator` decides via `decideMerge()`: trigger rule ALL_SUCCEEDED fails as soon as a source fails, ALL_DONE waits for all; missing sources past the deadline end TIMED_OUT; then the rule is evaluated over every source's `stepOutputs` side by side. Loop checks (`src/services/api/utils/pipeline/graph.ts`) cover connectors and merges together. The `dhis2-data-check` step answers "is the data already in DHIS2?": for chosen data elements, org units and periods (pull-style period settings) it counts data element × org unit × period combinations with a value via `dataValueSets` (not analytics) and returns `found`, `expected` and `completeness` (%); no data is a result (0), not an error, so a connector can branch on it. `POST /pipelines/:id/duplicate` copies a pipeline and its steps (not schedules, connectors or workflow) for reuse in another workflow.
+
+A workflow run may cover a fixed range of periods (`POST /workflows/:id/run` with `{ period: { periodType, start, end } }`, stored on `WorkflowRun.period`), e.g. to backfill history: `rangeContext()` gives each first pipeline's period steps (`climate-openeo-create`, `dhis2-instance-pull`, `dhis2-data-check`) a fixed-period context override (`src/shared/pipeline/runPeriod.ts`); steps on another period type keep their own window and are reported as `outsideRange`. Pipelines started later by connectors run on their own settings.
+
+### Workflow templates
+
+A template turns a few parameters into a workflow with its pipelines, steps and connector. The one template, `climate-prediction` (`src/shared/templates/climatePrediction.ts`), builds a "Climate data" pipeline (OCS sync, then request/wait/download/import per climate variable), a "Disease data" pipeline when case data is pulled from another instance, and a "Prediction" pipeline (analytics; with a CHAP prediction setup also trigger, poll and an optional notify), joined by a merge (ALL_SUCCEEDED) or, without a pull, a connector. With a prediction setup, its org units are used everywhere and its covariate sources are checked against what the workflow fetches; without one the workflow only gets the data ready. `buildClimatePredictionPlan()` is pure; `TemplateService` (`src/services/api/modules/templates/`) adds the outside checks (CHAP setup, staging data elements, ingested OCS collections and their time step, source route) and returns every problem as `errors`/`warnings`. Endpoints: `GET /templates`, `POST /templates/:template/preview` (saves nothing), `POST /templates/:template/workflows` (optional `backfill` range run straight away), `GET|PUT /workflows/:id/template` ("Edit setup"). The workflow stores `template`, `templateParams` and `templateState` (pipeline id and a steps fingerprint per role, plus the join); an update replaces steps in place by position (so kept steps keep their run history), refuses with `template_edited` when a pipeline's steps were changed by hand unless `force`, and deletes a pipeline the parameters no longer need (or, if it has runs, takes it out of the workflow and switches it off).
+
+### Connected instance mappings
+
+Mappings belong to a connected instance (a `caps-src-` route on staging), not to steps. `ConnectedInstance` (keyed by route code) holds the instance's settings (`orgUnitMatch`: ID or CODE); each `InstanceMapping` pairs a remote item with a staging data element and is either PULL (instance → staging) or PUSH (staging → instance; data elements only). Within an instance each staging data element and each remote item is paired once; across instances only one can pull into a staging data element (unique `pullTarget`, set for PULL rows), while several can receive it. Endpoints (`src/services/api/modules/instances/`): `GET /instances`, `GET|PUT|DELETE /instances/:code` (PUT replaces the settings and whole mapping list; 409 `instance_mapping_conflict` when another instance pulls into a staging data element, `instance_mapping_in_use` when a step still moves a removed mapping), `GET /mappings`. Pull and push steps store `mapped` (staging data element ids) instead of `items`; older steps keep `items` and still run. Before a pull or push step runs, `resolveInstanceMappings()` (`src/services/worker/utils/`) fills in `items` from the mappings in the step's direction and replaces `orgUnitMatch` with the instance's setting when it has one, so the handlers only ever see `items`. Pure checks live in `src/shared/mappings/instanceMappings.ts`. The climate-prediction template's disease pull takes `disease.mapped` (checked against the instance's PULL mappings in the preview) and writes a mapped step; workflows saved earlier with `disease.items` keep working.
+
 ### Scheduler
 
 `src/services/scheduler/` loads active cron-only `PipelineSchedule` rows into an in-memory [Croner](https://github.com/hexagon/croner) job map (one job per schedule id), firing with each schedule's `inputContext` attached via Croner's `context` option. Postgres `LISTEN/NOTIFY` on `caps_schedule_events` (`schedule-events.ts`) keeps the map in sync when schedules are created/paused/updated/deleted or a pipeline is deactivated. Missed ticks during downtime are **not** replayed. Triggered executions go through the same durable outbox described above and still respect each pipeline's `concurrencyPolicy`. Cron expressions are 5-part, evaluated in the host server's IANA timezone.
@@ -137,30 +160,35 @@ Current handlers (see `Handlers` enum): climate dataset freshness (`open-climate
 
 ### Key Files
 
-| File                                               | Purpose                                                               |
-| -------------------------------------------------- | --------------------------------------------------------------------- |
-| `src/services/worker/worker.ts`                    | Worker entry point: initializes RabbitMQ topology, wires up consumers |
-| `src/services/scheduler/index.ts`                  | Scheduler entry point                                                 |
-| `src/services/api/index.ts`                        | API entry point (Burger API)                                          |
-| `src/services/worker/services/runners/pipeline.ts` | `PipelineCoordinator` — main orchestrator                             |
-| `src/services/worker/services/runners/step.ts`     | `StepRunner` — inline step execution                                  |
-| `src/services/worker/services/workers/step.ts`     | `StepWorker` — queued step execution                                  |
-| `src/services/worker/services/outbox/publisher.ts` | `OutboxPublisher` — transactional outbox delivery                     |
-| `src/services/worker/constants/handlers.ts`        | `Handlers` enum and `HANDLERS` registry                               |
-| `src/services/worker/types/service.ts`             | `StepHandler`/`StepContext` types                                     |
-| `src/services/worker/services/monitor/topology.ts` | RabbitMQ queue/exchange declarations (single source of truth)         |
-| `src/services/worker/services/monitor/monitor.ts`  | Dead-letter queue monitor                                             |
-| `src/services/scheduler/scheduler.ts`              | Croner job map management                                             |
-| `src/services/scheduler/schedule-events.ts`        | Postgres LISTEN/NOTIFY sync for schedule changes                      |
-| `src/shared/pipeline/outbox.ts`                    | Outbox write helpers (used inside triggering transactions)            |
-| `src/shared/handlers/catalog.ts`                   | Zod → JSON Schema handler catalog for the API                         |
-| `src/shared/clients/db.ts`                         | Prisma client factory                                                 |
+| File                                                | Purpose                                                                   |
+| --------------------------------------------------- | ------------------------------------------------------------------------- |
+| `src/services/worker/worker.ts`                     | Worker entry point: initializes RabbitMQ topology, wires up consumers     |
+| `src/services/scheduler/index.ts`                   | Scheduler entry point                                                     |
+| `src/services/api/index.ts`                         | API entry point (Burger API)                                              |
+| `src/services/worker/services/runners/pipeline.ts`  | `PipelineCoordinator` — main orchestrator                                 |
+| `src/services/worker/services/runners/step.ts`      | `StepRunner` — inline step execution                                      |
+| `src/services/worker/services/workers/step.ts`      | `StepWorker` — queued step execution                                      |
+| `src/services/worker/services/outbox/publisher.ts`  | `OutboxPublisher` — transactional outbox delivery                         |
+| `src/services/worker/constants/handlers.ts`         | `Handlers` enum and `HANDLERS` registry                                   |
+| `src/services/worker/types/service.ts`              | `StepHandler`/`StepContext` types                                         |
+| `src/services/worker/services/monitor/topology.ts`  | RabbitMQ queue/exchange declarations (single source of truth)             |
+| `src/services/worker/services/monitor/monitor.ts`   | Dead-letter queue monitor                                                 |
+| `src/services/scheduler/scheduler.ts`               | Croner job map management                                                 |
+| `src/services/scheduler/schedule-events.ts`         | Postgres LISTEN/NOTIFY sync for schedule changes                          |
+| `src/shared/pipeline/outbox.ts`                     | Outbox write helpers (used inside triggering transactions)                |
+| `src/shared/handlers/catalog.ts`                    | Zod → JSON Schema handler catalog for the API                             |
+| `src/shared/pipeline/finishExecution.ts`            | Ends an execution and creates its connector runs (the only way to finish) |
+| `src/services/worker/services/runners/connector.ts` | `ConnectorEvaluator` — decides connector runs and starts target pipelines |
+| `src/shared/templates/climatePrediction.ts`         | Climate → Prediction template: parameters, checks and the plan it builds  |
+| `src/shared/clients/db.ts`                          | Prisma client factory                                                     |
 
 ### Database Schema Overview
 
-**Definition models** (blueprints): `Pipeline`, `PipelineStep`, `PipelineSchedule` — immutable config.
+**Definition models** (blueprints): `Pipeline`, `PipelineStep`, `PipelineSchedule`, `PipelineConnector`, `Workflow` — immutable config.
 
 **Execution models** (runtime state): `PipelineExecution` (status machine: PENDING → RUNNING → AWAITING_STEP → COMPLETED/FAILED), `StepExecution`, `TaskExecution`, `StepRetryCommand` — mutable, cursor-driven.
+
+**Connector runs**: `ConnectorRun` — one decision per connector per finished source execution.
 
 **Delivery**: `OutboxMessage` — transactional outbox rows for reliable RabbitMQ publishing.
 

@@ -70,6 +70,18 @@ export async function setupTopology(channel: Channel): Promise<void> {
     `[topology] Queue declared: ${QUEUES.STEP_RESULTS} (durable=true, dlx=${EXCHANGES.DLX})`
   );
 
+  // pipeline.connectors — with DLX, no TTL
+  // Messages arrive when a connector's delay is up (the outbox holds them until then)
+  await channel.assertQueue(QUEUES.PIPELINE_CONNECTORS, {
+    durable: true,
+    arguments: {
+      "x-dead-letter-exchange": EXCHANGES.DLX,
+    },
+  });
+  logger.info(
+    `[topology] Queue declared: ${QUEUES.PIPELINE_CONNECTORS} (durable=true, dlx=${EXCHANGES.DLX})`
+  );
+
   // step.* queues — with DLX, no TTL
   // Long-running steps (predictions, heavy syncs) need no TTL
   // The coordinator's AWAITING_STEP status surfaces stuck pipelines

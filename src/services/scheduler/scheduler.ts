@@ -1,5 +1,10 @@
 import { Cron } from "croner";
-import { ScheduleStatus, type PipelineSchedule, type PrismaClient } from "@db/client";
+import {
+  ScheduleStatus,
+  type PipelineSchedule,
+  type PrismaClient,
+  type Workflow,
+} from "@db/client";
 import type { TriggerService } from "@/services/scheduler/trigger-service.ts";
 import {
   parseScheduleEvent,
@@ -11,12 +16,18 @@ import { CRON_PATTERN_MODE } from "@/shared/utils/cron.ts";
 import { ServiceType } from "@/shared/constants/service.ts";
 import { serviceLogger } from "@/shared/utils/logger.ts";
 import { getServerTimezone } from "@/shared/utils/timezone.ts";
+import { WorkflowStartError } from "@/shared/pipeline/workflows.ts";
 
 export type ScheduleJobContext = {
   scheduleId: string;
   pipelineId: string;
   name: string;
   inputContext: Record<string, unknown>;
+};
+
+export type WorkflowJobContext = {
+  workflowId: string;
+  name: string;
 };
 
 type LoadedSchedule = PipelineSchedule & {
@@ -38,8 +49,15 @@ function isEligible(schedule: LoadedSchedule): boolean {
   return schedule.status === ScheduleStatus.ACTIVE && schedule.pipeline.isActive;
 }
 
+function isWorkflowEligible(
+  workflow: Pick<Workflow, "isActive" | "cronExpr">
+): workflow is Pick<Workflow, "isActive"> & { cronExpr: string } {
+  return workflow.isActive && Boolean(workflow.cronExpr);
+}
+
 export class Scheduler {
   private readonly jobs = new Map<string, Cron<ScheduleJobContext>>();
+  private readonly workflowJobs = new Map<string, Cron<WorkflowJobContext>>();
   private subscription: ScheduleEventSubscription | null = null;
 
   constructor(
@@ -67,6 +85,9 @@ export class Scheduler {
     for (const scheduleId of [...this.jobs.keys()]) {
       this.removeJob(scheduleId);
     }
+    for (const workflowId of [...this.workflowJobs.keys()]) {
+      this.removeWorkflowJob(workflowId);
+    }
     serviceLogger.info(ServiceType.SCHEDULER, "Stopped");
   }
 
@@ -78,6 +99,14 @@ export class Scheduler {
     return this.jobs.get(scheduleId);
   }
 
+  hasWorkflow(workflowId: string): boolean {
+    return this.workflowJobs.has(workflowId);
+  }
+
+  getWorkflowJob(workflowId: string): Cron<WorkflowJobContext> | undefined {
+    return this.workflowJobs.get(workflowId);
+  }
+
   async handleNotify(payload: string): Promise<void> {
     const event = parseScheduleEvent(payload);
     if (!event) {
@@ -86,6 +115,11 @@ export class Scheduler {
     }
 
     try {
+      if (event.table === "workflows") {
+        await this.syncWorkflow(event.id, event.op === "DELETE");
+        return;
+      }
+
       if (event.table === "pipelines") {
         await this.syncPipeline(event.id, event.op === "DELETE");
         return;
@@ -125,10 +159,99 @@ export class Scheduler {
       this.upsertJob(schedule);
     }
 
+    const workflows = await this.prisma.workflow.findMany({
+      where: { isActive: true, cronExpr: { not: null } },
+    });
+    const keepWorkflows = new Set(workflows.map((workflow) => workflow.id));
+    for (const workflowId of [...this.workflowJobs.keys()]) {
+      if (!keepWorkflows.has(workflowId)) {
+        this.removeWorkflowJob(workflowId);
+      }
+    }
+    for (const workflow of workflows) {
+      this.upsertWorkflowJob(workflow);
+    }
+
     serviceLogger.info(
       ServiceType.SCHEDULER,
-      `Loaded ${schedules.length} active schedule(s) into memory`
+      `Loaded ${schedules.length} active schedule(s) and ${workflows.length} workflow schedule(s) into memory`
     );
+  }
+
+  private async syncWorkflow(workflowId: string, deleted: boolean): Promise<void> {
+    if (deleted) {
+      this.removeWorkflowJob(workflowId);
+      return;
+    }
+    const workflow = await this.prisma.workflow.findUnique({ where: { id: workflowId } });
+    if (!workflow) {
+      this.removeWorkflowJob(workflowId);
+      return;
+    }
+    this.upsertWorkflowJob(workflow);
+  }
+
+  private upsertWorkflowJob(
+    workflow: Pick<Workflow, "id" | "name" | "isActive" | "cronExpr">
+  ): void {
+    this.removeWorkflowJob(workflow.id);
+    if (!isWorkflowEligible(workflow)) {
+      return;
+    }
+
+    const context: WorkflowJobContext = { workflowId: workflow.id, name: workflow.name };
+    const job = new Cron<WorkflowJobContext>(
+      workflow.cronExpr,
+      {
+        name: `workflow:${workflow.id}`,
+        timezone: getServerTimezone(),
+        mode: CRON_PATTERN_MODE,
+        protect: true,
+        context,
+        catch: (err) => {
+          serviceLogger.error(
+            ServiceType.SCHEDULER,
+            `Workflow ${workflow.id} (${workflow.name}) callback failed: ${String(err)}`
+          );
+        },
+      },
+      async (self, ctx) => {
+        let result;
+        try {
+          result = await this.triggerService.triggerWorkflow(ctx.workflowId);
+        } catch (err) {
+          if (err instanceof WorkflowStartError) {
+            serviceLogger.warn(
+              ServiceType.SCHEDULER,
+              `Workflow ${ctx.workflowId} (${ctx.name}) not started: ${err.message}`
+            );
+            return;
+          }
+          throw err;
+        }
+
+        await this.prisma.workflow.update({
+          where: { id: ctx.workflowId },
+          data: { lastRunAt: new Date(), nextRunAt: self.nextRun() },
+        });
+
+        serviceLogger.info(
+          ServiceType.SCHEDULER,
+          `Workflow ${ctx.workflowId} (${ctx.name}) fired, workflowRunId=${result.workflowRunId} started=${result.started.length} skipped=${result.skipped.length}`
+        );
+      }
+    );
+
+    this.workflowJobs.set(workflow.id, job);
+  }
+
+  private removeWorkflowJob(workflowId: string): void {
+    const job = this.workflowJobs.get(workflowId);
+    if (!job) {
+      return;
+    }
+    job.stop();
+    this.workflowJobs.delete(workflowId);
   }
 
   private async syncSchedule(scheduleId: string): Promise<void> {

@@ -7,6 +7,7 @@ export const EXCHANGES = {
 export const QUEUES = {
   PIPELINE_EXECUTIONS: "pipeline.executions",
   STEP_RESULTS: "pipeline.step-results",
+  PIPELINE_CONNECTORS: "pipeline.connectors",
   DEAD_LETTERS: "caps.dead-letters",
   STEP: HANDLERS,
 } as const;

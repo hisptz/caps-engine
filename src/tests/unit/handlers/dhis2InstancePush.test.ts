@@ -23,6 +23,7 @@ import { createRouteClient, dhis2RestClient } from "@/shared/clients/dhis.ts";
 import { dhis2InstancePush } from "@/services/worker/services/handlers/dhis2InstancePush/index.ts";
 import { StepSkippedError } from "@/services/worker/types/service.ts";
 import { StepError } from "@/shared/utils/error.ts";
+import { dhis2InstancePushConfigSchema } from "@/services/worker/services/handlers/dhis2InstancePush/schemas/config.ts";
 
 const mockStagingGet = vi.mocked(dhis2RestClient.get);
 
@@ -172,6 +173,20 @@ function context(config: Record<string, unknown> = baseConfig()) {
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe("dhis2InstancePushConfigSchema", () => {
+  it("takes mapped staging data elements or items, not both or neither", () => {
+    const rest = baseConfig();
+    delete rest.items;
+    expect(dhis2InstancePushConfigSchema.safeParse({ ...rest, mapped: [CASES] }).success).toBe(
+      true
+    );
+    expect(dhis2InstancePushConfigSchema.safeParse(rest).success).toBe(false);
+    expect(dhis2InstancePushConfigSchema.safeParse(baseConfig({ mapped: [CASES] })).success).toBe(
+      false
+    );
+  });
+});
 
 describe("dhis2-instance-push", () => {
   beforeEach(() => {

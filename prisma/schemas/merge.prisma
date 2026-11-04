@@ -1,0 +1,98 @@
+// ============================================================
+// MERGE CLUSTER
+// Wait for several pipelines of a workflow run, then start one more.
+// A merge run collects one arrival per source pipeline; it decides once
+// every source has arrived (or a source failed, or time ran out).
+// ============================================================
+
+model PipelineMerge {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+
+  // Merges live inside a workflow: its runs tell which source runs belong together
+  workflowId       String @db.Uuid
+  targetPipelineId String @db.Uuid
+
+  // When to continue: every source succeeded, or every source finished whatever the result
+  triggerRule MergeTriggerRule @default(ALL_SUCCEEDED)
+
+  // How long to wait for the last source after the first one arrives
+  timeoutMinutes Int @default(1440)
+
+  // JSONLogic rule over { context: { stepOutputs }, status } of all sources; null = always
+  condition Json?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workflow       Workflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  // Restrict: a pipeline a merge starts cannot be deleted until the merge is removed
+  targetPipeline Pipeline      @relation("MergeTarget", fields: [targetPipelineId], references: [id], onDelete: Restrict)
+  sources        MergeSource[]
+  runs           MergeRun[]
+
+  @@index([workflowId])
+  @@index([targetPipelineId])
+  @@map("pipeline_merges")
+}
+
+model MergeSource {
+  mergeId    String @db.Uuid
+  pipelineId String @db.Uuid
+
+  merge    PipelineMerge @relation(fields: [mergeId], references: [id], onDelete: Cascade)
+  pipeline Pipeline      @relation("MergeSources", fields: [pipelineId], references: [id], onDelete: Cascade)
+
+  @@id([mergeId, pipelineId])
+  @@index([pipelineId])
+  @@map("merge_sources")
+}
+
+model MergeRun {
+  id            String @id @default(uuid()) @db.Uuid
+  mergeId       String @db.Uuid
+  workflowRunId String @db.Uuid
+
+  status MergeRunStatus @default(WAITING)
+
+  // First arrival + timeoutMinutes; past it the run ends TIMED_OUT
+  deadlineAt  DateTime
+  evaluatedAt DateTime?
+
+  // Set once the merge fires; the execution it started
+  targetExecutionId String? @unique @db.Uuid
+
+  // Why the run ended where it did (a source failed, time ran out, rule not met, …)
+  reason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  merge           PipelineMerge      @relation(fields: [mergeId], references: [id], onDelete: Cascade)
+  workflowRun     WorkflowRun        @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  targetExecution PipelineExecution? @relation("MergeRunTarget", fields: [targetExecutionId], references: [id], onDelete: SetNull)
+  arrivals        MergeArrival[]
+
+  // A merge decides once per workflow run
+  @@unique([mergeId, workflowRunId])
+  @@index([status, deadlineAt])
+  @@index([workflowRunId])
+  @@map("merge_runs")
+}
+
+model MergeArrival {
+  mergeRunId  String                  @db.Uuid
+  pipelineId  String                  @db.Uuid
+  executionId String                  @db.Uuid
+  status      PipelineExecutionStatus
+  createdAt   DateTime                @default(now())
+
+  mergeRun  MergeRun          @relation(fields: [mergeRunId], references: [id], onDelete: Cascade)
+  execution PipelineExecution @relation("MergeArrivals", fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@id([mergeRunId, pipelineId])
+  @@map("merge_arrivals")
+}

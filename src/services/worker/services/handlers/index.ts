@@ -8,6 +8,7 @@ export * from "./predictionDataDownload";
 export * from "./dhis2InstancePull";
 export * from "./dhis2InstancePush";
 export * from "./dhis2DataUpload";
+export * from "./dhis2DataCheck";
 export * from "./thresholdGeneration";
 export * from "./alertGeneration";
 export * from "./eventDataUpload";
