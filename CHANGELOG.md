@@ -1,3 +1,9 @@
+## [3.1.2](https://github.com/hisptz/caps-engine/compare/v3.1.1...v3.1.2) (2026-10-28)
+
+### Bug Fixes
+
+- read the CHAP job status from the whole job as well as the bare string ([#15](https://github.com/hisptz/caps-engine/issues/15)) ([50d8c3b](https://github.com/hisptz/caps-engine/commit/50d8c3bbbf182ed7d782b17d4cb561b1eb03a36d)), closes [dhis2-chap/chap-core#786](https://github.com/dhis2-chap/chap-core/issues/786)
+
 ## [3.1.1](https://github.com/hisptz/caps-engine/compare/v3.1.0...v3.1.1) (2026-10-27)
 
 ### Bug Fixes
