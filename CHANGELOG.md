@@ -1,3 +1,9 @@
+## [3.2.2](https://github.com/hisptz/caps-engine/compare/v3.2.1...v3.2.2) (2026-11-05)
+
+### Bug Fixes
+
+- update replayDeadMessage tests to handle async operations ([#17](https://github.com/hisptz/caps-engine/issues/17)) ([6ce3ba6](https://github.com/hisptz/caps-engine/commit/6ce3ba6335d13b809c47619b04a8b6cee38c8c51))
+
 ## [3.2.1](https://github.com/hisptz/caps-engine/compare/v3.2.0...v3.2.1) (2026-11-05)
 
 ### Bug Fixes
