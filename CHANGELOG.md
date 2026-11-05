@@ -1,3 +1,9 @@
+## [3.2.1](https://github.com/hisptz/caps-engine/compare/v3.2.0...v3.2.1) (2026-11-05)
+
+### Bug Fixes
+
+- implement health check for caps-worker and refactor AMQP integration for automatic reconnection ([11bad3d](https://github.com/hisptz/caps-engine/commit/11bad3d7399bc83bc60ccf9c50cf188ce043beb0))
+
 # [3.2.0](https://github.com/hisptz/caps-engine/compare/v3.1.2...v3.2.0) (2026-11-04)
 
 ### Features
