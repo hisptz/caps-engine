@@ -342,11 +342,11 @@ describe("DlxMonitor — dead message handling", () => {
 });
 
 describe("replayDeadMessage", () => {
-  it("publishes to the correct target queue with the message body", () => {
+  it("publishes to the correct target queue with the message body", async () => {
     const channel = buildMockChannel();
     const body = { executionId: "exec-replay-001", someField: "value" };
 
-    replayDeadMessage(channel as never, "pipeline.executions", body);
+    await replayDeadMessage(channel as never, "pipeline.executions", body);
 
     expect(channel.sendToQueue).toHaveBeenCalledOnce();
     const [queue, bufArg, options] = channel.sendToQueue.mock.calls[0]!;
@@ -355,20 +355,20 @@ describe("replayDeadMessage", () => {
     expect((options as Record<string, unknown>)["persistent"]).toBe(true);
   });
 
-  it("sends with empty headers to strip x-death metadata", () => {
+  it("sends with empty headers to strip x-death metadata", async () => {
     const channel = buildMockChannel();
 
-    replayDeadMessage(channel as never, "pipeline.executions", { executionId: "exec-strip" });
+    await replayDeadMessage(channel as never, "pipeline.executions", { executionId: "exec-strip" });
 
     const [, , options] = channel.sendToQueue.mock.calls[0]!;
     expect((options as Record<string, unknown>)["headers"]).toEqual({});
   });
 
-  it("can replay to a step-specific queue", () => {
+  it("can replay to a step-specific queue", async () => {
     const channel = buildMockChannel();
     const body = { executionId: "exec-step", stepExecutionId: "step-exec-123" };
 
-    replayDeadMessage(channel as never, "step.climate-data-download", body);
+    await replayDeadMessage(channel as never, "step.climate-data-download", body);
 
     const [queue] = channel.sendToQueue.mock.calls[0]!;
     expect(queue).toBe("step.climate-data-download");
