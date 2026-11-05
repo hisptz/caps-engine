@@ -6,7 +6,7 @@ const SERVICES = {
     outfile: ".build/caps-api",
   },
   worker: {
-    entry: "src/services/worker/worker.ts",
+    entry: "src/services/worker/index.ts",
     outfile: ".build/caps-worker",
   },
   scheduler: {

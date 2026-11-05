@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PipelineExecutionStatus, StepExecutionStatus, type PrismaClient } from "@db/client";
-import type { Channel } from "amqplib";
 import { buildMockStep, buildMockStepExecution } from "@/tests/utils/helpers.ts";
 
 vi.mock("@/shared/handlers/catalog.ts", async (importOriginal) => ({
@@ -77,7 +76,6 @@ function setup(handlerKey: string, { updatedCount = 1 } = {}) {
   };
   const worker = new StepWorker({
     prisma: prisma as unknown as PrismaClient,
-    channel: {} as Channel,
   });
   return { worker, prisma, tx };
 }

@@ -99,7 +99,7 @@ function buildCoordinator(stepRunnerOverride?: Partial<StepRunner>) {
   } as unknown as StepRunner;
 
   return {
-    coordinator: new PipelineCoordinator({ prisma, channel, stepRunner }),
+    coordinator: new PipelineCoordinator({ prisma, stepRunner }),
     mockRun: (stepRunner as unknown as { run: ReturnType<typeof vi.fn> }).run,
   };
 }

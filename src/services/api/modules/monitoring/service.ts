@@ -139,7 +139,7 @@ export class MonitoringService {
       }
     }
 
-    replayDeadMessage(apiChannel(), targetQueue, messageBody);
+    await replayDeadMessage(apiChannel(), targetQueue, messageBody);
 
     if (executionId) {
       await apiDb.pipelineExecution.update({

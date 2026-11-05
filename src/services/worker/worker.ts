@@ -1,4 +1,5 @@
-import amqplib from "amqplib";
+import amqp from "amqp-connection-manager";
+import type { Channel, ConsumeMessage } from "amqplib";
 import { setupTelemetry } from "@/shared/telemetry/index.ts";
 
 // Import all handlers so the registry is populated before any message is consumed
@@ -24,10 +25,35 @@ import { MergeEvaluator } from "@/services/worker/services/runners/merge.ts";
 import type { MergeJobMessage } from "@/shared/pipeline/merges.ts";
 import { QUEUES } from "@/services/worker/constants/monitor.ts";
 import type { ConnectorJobMessage } from "@/shared/pipeline/finishExecution.ts";
+import { startHealthBeat } from "@/services/worker/utils/health.ts";
+
+// Matches the RabbitMQ server default; a shorter interval makes long steps trip
+// heartbeat timeouts, which reconnects and redelivers the in-flight message.
+const HEARTBEAT_SECONDS = 60;
+const RECONNECT_SECONDS = 5;
 
 // ============================================================
-// Queue names for step-specific workers (from the handler registry)
+// Ack helpers
+// A message must be settled on the channel that delivered it.
+// If that channel died mid-handling (reconnect), settling throws;
+// RabbitMQ redelivers the message on the new channel instead.
 // ============================================================
+
+function ack(channel: Channel, msg: ConsumeMessage) {
+  try {
+    channel.ack(msg);
+  } catch (err) {
+    logger.warn("[worker] Ack skipped, channel closed — message will be redelivered:", err);
+  }
+}
+
+function nack(channel: Channel, msg: ConsumeMessage) {
+  try {
+    channel.nack(msg, false, false);
+  } catch (err) {
+    logger.warn("[worker] Nack skipped, channel closed — message will be redelivered:", err);
+  }
+}
 
 async function startWorker() {
   const shutdownTelemetry = setupTelemetry();
@@ -35,163 +61,172 @@ async function startWorker() {
   logger.info("Starting CAPS worker...");
   const prisma = createDbClient();
   logger.info("[worker] DB client created");
-  const connection = await amqplib.connect(env.RABBITMQ_URL);
-  logger.info("[worker] RabbitMQ connection established");
 
-  let shuttingDown = false;
-  connection.on("error", (err) => {
-    logger.error("[worker] RabbitMQ connection error:", err);
+  // Reconnects automatically; every channel's setup() re-runs on each new connection
+  const connection = amqp.connect([env.RABBITMQ_URL], {
+    heartbeatIntervalInSeconds: HEARTBEAT_SECONDS,
+    reconnectTimeInSeconds: RECONNECT_SECONDS,
   });
-  connection.on("close", () => {
-    if (shuttingDown) return;
-    logger.error("[worker] RabbitMQ connection closed unexpectedly — exiting");
-    process.exit(1);
+  connection.on("connect", () => logger.info("[worker] RabbitMQ connected"));
+  connection.on("disconnect", ({ err }) => {
+    logger.warn("[worker] RabbitMQ disconnected — reconnecting:", err);
   });
-
-  const channel = await connection.createChannel();
-  channel.on("error", (err) => {
-    logger.error("[worker] RabbitMQ channel error:", err);
+  connection.on("connectFailed", ({ err }) => {
+    logger.warn(`[worker] RabbitMQ connect failed — retrying in ${RECONNECT_SECONDS}s:`, err);
   });
-
-  //Declares all queues and exchanges
-  await setupTopology(channel);
-
-  // One message at a time per process
-  await channel.prefetch(1);
+  const healthBeat = startHealthBeat(() => connection.isConnected());
 
   const stepRunner = new StepRunner({ prisma });
-  const coordinator = new PipelineCoordinator({ prisma, channel, stepRunner });
-  const stepWorker = new StepWorker({ prisma, channel });
+  const coordinator = new PipelineCoordinator({ prisma, stepRunner });
+  const stepWorker = new StepWorker({ prisma });
   const connectorEvaluator = new ConnectorEvaluator({ prisma });
   const mergeEvaluator = new MergeEvaluator({ prisma });
-  const dlxMonitor = new DlxMonitor(prisma, channel);
   const outboxPublisher = new OutboxPublisher(prisma, connection);
 
-  // --------------------------------------------------------
-  // Consumer 1: pipeline coordinator
-  // Woken by pipeline triggers and by step-result completions
-  // --------------------------------------------------------
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises
-  await channel.consume(PIPELINE_QUEUE, async (msg) => {
-    if (!msg) return;
-    let executionId: string | undefined;
-    try {
-      ({ executionId } = JSON.parse(msg.content.toString()) as PipelineJobMessage);
-      logger.info(`[worker] [coordinator] Message received executionId=${executionId}`);
-      await coordinator.handle(executionId);
-      logger.info(`[worker] [coordinator] Ack executionId=${executionId}`);
-      channel.ack(msg);
-    } catch (err) {
-      logger.error("[coordinator] Unhandled error:", err);
-      logger.warn(
-        `[worker] [coordinator] Nack (no requeue) executionId=${executionId ?? "unknown"}`
-      );
-      channel.nack(msg, false, false);
-    }
-  });
+  const workerChannel = connection.createChannel({
+    name: "worker",
+    confirm: false,
+    setup: async (channel: Channel) => {
+      //Declares all queues and exchanges
+      await setupTopology(channel);
 
-  // --------------------------------------------------------
-  // Consumer 2: step result handler
-  // Woken when any step worker finishes a queued step
-  // --------------------------------------------------------
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises
-  await channel.consume(STEP_RESULTS_QUEUE, async (msg) => {
-    if (!msg) return;
-    let parsedResult: StepResultMessage | undefined;
-    try {
-      parsedResult = JSON.parse(msg.content.toString()) as StepResultMessage;
-      logger.info(
-        `[worker] [step-results] Message received executionId=${parsedResult.executionId} stepExecutionId=${parsedResult.stepExecutionId}`
-      );
-      await coordinator.handleStepResult(parsedResult);
-      logger.info(`[worker] [step-results] Ack executionId=${parsedResult.executionId}`);
-      channel.ack(msg);
-    } catch (err) {
-      logger.error("[step-results] Unhandled error:", err);
-      logger.warn(
-        `[worker] [step-results] Nack (no requeue) executionId=${parsedResult?.executionId ?? "unknown"}`
-      );
-      channel.nack(msg, false, false);
-    }
-  });
+      // One message at a time per process
+      await channel.prefetch(1);
 
-  // --------------------------------------------------------
-  // Consumer 3: pipeline connectors
-  // Woken when a finished execution's connector run is due
-  // --------------------------------------------------------
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises
-  await channel.consume(QUEUES.PIPELINE_CONNECTORS, async (msg) => {
-    if (!msg) return;
-    let connectorRunId: string | undefined;
-    try {
-      const body = JSON.parse(msg.content.toString()) as Partial<
-        ConnectorJobMessage & MergeJobMessage
-      >;
-      // Merge decisions share this queue; their messages carry a merge run id instead
-      if (body.mergeRunId) {
-        logger.info(`[worker] [connectors] Merge message received mergeRunId=${body.mergeRunId}`);
-        await mergeEvaluator.handle(body.mergeRunId);
-        channel.ack(msg);
-        return;
+      // --------------------------------------------------------
+      // Consumer 1: pipeline coordinator
+      // Woken by pipeline triggers and by step-result completions
+      // --------------------------------------------------------
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      await channel.consume(PIPELINE_QUEUE, async (msg) => {
+        if (!msg) return;
+        let executionId: string | undefined;
+        try {
+          ({ executionId } = JSON.parse(msg.content.toString()) as PipelineJobMessage);
+          logger.info(`[worker] [coordinator] Message received executionId=${executionId}`);
+          await coordinator.handle(executionId);
+          logger.info(`[worker] [coordinator] Ack executionId=${executionId}`);
+          ack(channel, msg);
+        } catch (err) {
+          logger.error("[coordinator] Unhandled error:", err);
+          logger.warn(
+            `[worker] [coordinator] Nack (no requeue) executionId=${executionId ?? "unknown"}`
+          );
+          nack(channel, msg);
+        }
+      });
+
+      // --------------------------------------------------------
+      // Consumer 2: step result handler
+      // Woken when any step worker finishes a queued step
+      // --------------------------------------------------------
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      await channel.consume(STEP_RESULTS_QUEUE, async (msg) => {
+        if (!msg) return;
+        let parsedResult: StepResultMessage | undefined;
+        try {
+          parsedResult = JSON.parse(msg.content.toString()) as StepResultMessage;
+          logger.info(
+            `[worker] [step-results] Message received executionId=${parsedResult.executionId} stepExecutionId=${parsedResult.stepExecutionId}`
+          );
+          await coordinator.handleStepResult(parsedResult);
+          logger.info(`[worker] [step-results] Ack executionId=${parsedResult.executionId}`);
+          ack(channel, msg);
+        } catch (err) {
+          logger.error("[step-results] Unhandled error:", err);
+          logger.warn(
+            `[worker] [step-results] Nack (no requeue) executionId=${parsedResult?.executionId ?? "unknown"}`
+          );
+          nack(channel, msg);
+        }
+      });
+
+      // --------------------------------------------------------
+      // Consumer 3: pipeline connectors
+      // Woken when a finished execution's connector run is due
+      // --------------------------------------------------------
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      await channel.consume(QUEUES.PIPELINE_CONNECTORS, async (msg) => {
+        if (!msg) return;
+        let connectorRunId: string | undefined;
+        try {
+          const body = JSON.parse(msg.content.toString()) as Partial<
+            ConnectorJobMessage & MergeJobMessage
+          >;
+          // Merge decisions share this queue; their messages carry a merge run id instead
+          if (body.mergeRunId) {
+            logger.info(
+              `[worker] [connectors] Merge message received mergeRunId=${body.mergeRunId}`
+            );
+            await mergeEvaluator.handle(body.mergeRunId);
+            ack(channel, msg);
+            return;
+          }
+          connectorRunId = body.connectorRunId;
+          if (!connectorRunId) throw new Error("Message has no connectorRunId or mergeRunId");
+          logger.info(`[worker] [connectors] Message received connectorRunId=${connectorRunId}`);
+          await connectorEvaluator.handle(connectorRunId);
+          logger.info(`[worker] [connectors] Ack connectorRunId=${connectorRunId}`);
+          ack(channel, msg);
+        } catch (err) {
+          logger.error("[connectors] Unhandled error:", err);
+          logger.warn(
+            `[worker] [connectors] Nack (no requeue) connectorRunId=${connectorRunId ?? "unknown"}`
+          );
+          nack(channel, msg);
+        }
+      });
+
+      // --------------------------------------------------------
+      // Consumer 4: step-specific queue workers
+      // Each step queue can be consumed by a dedicated worker pool
+      // in a separate process — this wires them up in a single
+      // process for simplicity, but they can be split out
+      // --------------------------------------------------------
+      for (const queueName of STEP_QUEUES) {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises
+        await channel.consume(queueName, async (msg) => {
+          if (!msg) return;
+          let job: StepJobMessage | undefined;
+          try {
+            job = JSON.parse(msg.content.toString()) as StepJobMessage;
+            logger.info(
+              `[worker] [${queueName}] Message received executionId=${job.executionId} stepExecutionId=${job.stepExecutionId}`
+            );
+            await stepWorker.handle(job);
+            logger.info(`[worker] [${queueName}] Ack executionId=${job.executionId}`);
+            ack(channel, msg);
+          } catch (err) {
+            logger.error(`[${queueName}] Unhandled error:`, err);
+            logger.warn(
+              `[worker] [${queueName}] Nack (no requeue) executionId=${job?.executionId ?? "unknown"}`
+            );
+            nack(channel, msg);
+          }
+        });
+        logger.info(`Listening on: ${queueName}`);
       }
-      connectorRunId = body.connectorRunId;
-      if (!connectorRunId) throw new Error("Message has no connectorRunId or mergeRunId");
-      logger.info(`[worker] [connectors] Message received connectorRunId=${connectorRunId}`);
-      await connectorEvaluator.handle(connectorRunId);
-      logger.info(`[worker] [connectors] Ack connectorRunId=${connectorRunId}`);
-      channel.ack(msg);
-    } catch (err) {
-      logger.error("[connectors] Unhandled error:", err);
-      logger.warn(
-        `[worker] [connectors] Nack (no requeue) connectorRunId=${connectorRunId ?? "unknown"}`
-      );
-      channel.nack(msg, false, false);
-    }
+
+      await new DlxMonitor(prisma, channel).start();
+
+      logger.info(`Listening on: ${PIPELINE_QUEUE}`);
+      logger.info(`Listening on: ${STEP_RESULTS_QUEUE}`);
+      logger.info(`Listening on: ${QUEUES.PIPELINE_CONNECTORS}`);
+    },
+  });
+  workerChannel.on("error", (err) => {
+    logger.error("[worker] RabbitMQ channel setup failed:", err);
   });
 
-  // --------------------------------------------------------
-  // Consumer 4: step-specific queue workers
-  // Each step queue can be consumed by a dedicated worker pool
-  // in a separate process — this wires them up in a single
-  // process for simplicity, but they can be split out
-  // --------------------------------------------------------
-  for (const queueName of STEP_QUEUES) {
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
-    await channel.consume(queueName, async (msg) => {
-      if (!msg) return;
-      let job: StepJobMessage | undefined;
-      try {
-        job = JSON.parse(msg.content.toString()) as StepJobMessage;
-        logger.info(
-          `[worker] [${queueName}] Message received executionId=${job.executionId} stepExecutionId=${job.stepExecutionId}`
-        );
-        await stepWorker.handle(job);
-        logger.info(`[worker] [${queueName}] Ack executionId=${job.executionId}`);
-        channel.ack(msg);
-      } catch (err) {
-        logger.error(`[${queueName}] Unhandled error:`, err);
-        logger.warn(
-          `[worker] [${queueName}] Nack (no requeue) executionId=${job?.executionId ?? "unknown"}`
-        );
-        channel.nack(msg, false, false);
-      }
-    });
-    logger.info(`Listening on: ${queueName}`);
-  }
-
-  await dlxMonitor.start();
-  await outboxPublisher.start();
-
-  logger.info(`Listening on: ${PIPELINE_QUEUE}`);
-  logger.info(`Listening on: ${STEP_RESULTS_QUEUE}`);
-  logger.info(`Listening on: ${QUEUES.PIPELINE_CONNECTORS}`);
+  await workerChannel.waitForConnect();
+  outboxPublisher.start();
 
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   process.on("SIGTERM", async () => {
     logger.info("[worker] SIGTERM received — beginning graceful shutdown");
-    shuttingDown = true;
+    clearInterval(healthBeat);
     await outboxPublisher.stop();
-    await channel.close();
+    await workerChannel.close();
     await connection.close();
     await prisma.$disconnect();
     await shutdownTelemetry();

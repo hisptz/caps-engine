@@ -1,5 +1,5 @@
 import { OutboxDeliveryStatus, PrismaClient, type OutboxMessage } from "@db/client";
-import type { ChannelModel, ConfirmChannel } from "amqplib";
+import type { AmqpConnectionManager, ChannelWrapper } from "amqp-connection-manager";
 import { randomUUID } from "node:crypto";
 import { logger } from "@/shared/utils";
 
@@ -9,6 +9,7 @@ const DEFAULT_LEASE_MS = 30_000;
 const DEFAULT_MAX_ATTEMPTS = 25;
 const BACKOFF_BASE_MS = 1_000;
 const BACKOFF_MAX_MS = 60_000;
+const PUBLISH_TIMEOUT_MS = 10_000;
 
 export type OutboxPublisherOptions = {
   pollIntervalMs?: number;
@@ -29,11 +30,11 @@ export class OutboxPublisher {
   private readonly maxAttempts: number;
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
-  private confirmChannel: ConfirmChannel | null = null;
+  private confirmChannel: ChannelWrapper | null = null;
 
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly connection: ChannelModel,
+    private readonly connection: AmqpConnectionManager,
     options: OutboxPublisherOptions = {}
   ) {
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_MS;
@@ -42,11 +43,17 @@ export class OutboxPublisher {
     this.maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
   }
 
-  async start(): Promise<void> {
-    this.confirmChannel = await this.connection.createConfirmChannel();
-    this.confirmChannel.on("error", (err) => {
+  start(): void {
+    // The wrapper survives reconnects; publishes fail after PUBLISH_TIMEOUT_MS and are retried
+    const channel = this.connection.createChannel({
+      name: "outbox",
+      confirm: true,
+      publishTimeout: PUBLISH_TIMEOUT_MS,
+    });
+    channel.on("error", (err) => {
       logger.error("[outbox] Confirm channel error:", err);
     });
+    this.confirmChannel = channel;
     this.timer = setInterval(() => {
       void this.tick();
     }, this.pollIntervalMs);
@@ -69,7 +76,8 @@ export class OutboxPublisher {
 
   /** Exposed for tests — process one batch. */
   async tick(): Promise<void> {
-    if (this.running || !this.confirmChannel) return;
+    // While RabbitMQ is down, leave rows unclaimed rather than burn publish attempts
+    if (this.running || !this.confirmChannel || !this.connection.isConnected()) return;
     this.running = true;
     try {
       const messages = await this.claimBatch();
@@ -133,16 +141,10 @@ export class OutboxPublisher {
 
     try {
       const body = Buffer.from(JSON.stringify(message.payload));
-      await new Promise<void>((resolve, reject) => {
-        channel.sendToQueue(
-          message.destination,
-          body,
-          { persistent: true, messageId: message.id },
-          (err) => {
-            if (err) reject(err instanceof Error ? err : new Error(String(err)));
-            else resolve();
-          }
-        );
+      // Resolves once the broker confirms; rejects on nack or timeout
+      await channel.sendToQueue(message.destination, body, {
+        persistent: true,
+        messageId: message.id,
       });
 
       await this.prisma.outboxMessage.updateMany({

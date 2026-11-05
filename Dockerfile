@@ -54,6 +54,9 @@ ENV NODE_ENV=production
 COPY --from=compile-worker --chown=nonroot:nonroot /app/.build/caps-worker /app/caps-worker
 COPY --from=compile-worker --chown=nonroot:nonroot /app/.build/caps-outputs /tmp/caps-outputs
 USER nonroot
+# Unhealthy while disconnected from RabbitMQ; the worker keeps reconnecting on its own
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD ["/app/caps-worker", "--healthcheck"]
 ENTRYPOINT ["/app/caps-worker"]
 
 FROM gcr.io/distroless/cc-debian12:nonroot AS scheduler

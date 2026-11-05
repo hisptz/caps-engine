@@ -37,7 +37,7 @@
   },
   "scripts": {
     "dev:api": "bun run --bun --watch src/services/api/index.ts",
-    "dev:worker": "bun run --bun --watch src/services/worker/worker.ts",
+    "dev:worker": "bun run --bun --watch src/services/worker/index.ts",
     "dev:scheduler": "bun run --bun --watch src/services/scheduler/index.ts",
     "build:api": "bun run scripts/compile.ts api",
     "build:worker": "bun run scripts/compile.ts worker",
@@ -83,6 +83,7 @@
     "@opentelemetry/semantic-conventions": "^1.40.0",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
+    "amqp-connection-manager": "5.0.1",
     "amqplib": "^0.10.9",
     "axios": "1.15.0",
     "baseline-browser-mapping": "^2.10.35",

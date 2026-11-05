@@ -6,6 +6,7 @@ import {
   PrismaClient,
 } from "@db/client";
 import type { Channel, ConsumeMessage } from "amqplib";
+import type { ChannelWrapper } from "amqp-connection-manager";
 import { logger } from "@/shared/utils";
 import type { InputJsonValue } from "@prisma/client/runtime/client";
 import { QUEUES } from "@/services/worker/constants/monitor.ts";
@@ -265,12 +266,13 @@ export class DlxMonitor {
 // a dead-lettered message
 // ============================================================
 
-export function replayDeadMessage(
-  channel: Channel,
+export async function replayDeadMessage(
+  channel: Pick<ChannelWrapper, "sendToQueue">,
   targetQueue: string,
   messageBody: Record<string, unknown>
 ) {
-  channel.sendToQueue(targetQueue, Buffer.from(JSON.stringify(messageBody)), {
+  // Resolves once the broker confirms the publish
+  await channel.sendToQueue(targetQueue, Buffer.from(JSON.stringify(messageBody)), {
     persistent: true,
     // Strip x-death headers so RabbitMQ treats this as a fresh message
     headers: {},

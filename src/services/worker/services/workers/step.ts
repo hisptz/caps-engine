@@ -1,5 +1,4 @@
 import { PrismaClient, StepExecutionStatus, LogLevel, PipelineExecutionStatus } from "@db/client";
-import type { Channel } from "amqplib";
 import {
   resolveHandler,
   StepPermanentError,
@@ -31,7 +30,6 @@ import { enqueueOutboxMessage } from "@/shared/pipeline/outbox.ts";
 
 export interface StepWorkerDeps {
   prisma: PrismaClient;
-  channel: Channel;
 }
 
 export class StepWorker {

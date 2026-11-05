@@ -6,7 +6,6 @@ import {
   StepExecutionStatus,
   type Prisma,
 } from "@db/client";
-import type { Channel } from "amqplib";
 import { StepRunner } from "./step";
 import type { InputJsonValue } from "@prisma/client/runtime/client";
 import { SpanStatusCode } from "@opentelemetry/api";
@@ -24,7 +23,6 @@ export const STEP_RESULTS_QUEUE = "pipeline.step-results";
 
 export interface CoordinatorDeps {
   prisma: PrismaClient;
-  channel: Channel;
   stepRunner: StepRunner;
 }
 
