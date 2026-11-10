@@ -91,10 +91,13 @@ describe("climatePredictionParamsSchema", () => {
 });
 
 describe("buildClimatePredictionPlan", () => {
-  it("without a setup: climate data, then analytics only, joined by a connector", () => {
+  it("without a setup: one climate pipeline that refreshes analytics at the end", () => {
     const plan = buildClimatePredictionPlan(params(), null);
 
-    expect(plan.pipelines.map((p) => p.role)).toEqual(["climate", "prediction"]);
+    expect(plan.pipelines.map((p) => p.role)).toEqual(["climate"]);
+    expect(plan.pipelines[0]!.name).toBe(
+      "Fetch weekly climate data from Open Climate Service · Malawi"
+    );
     expect(plan.pipelines[0]!.steps[0]!.handlerConfig).toEqual({
       datasetIds: ["era5.precip", "era5.temp"],
     });
@@ -108,6 +111,7 @@ describe("buildClimatePredictionPlan", () => {
       Handlers.CLIMATE_OPENEO_POLL,
       Handlers.CLIMATE_OPENEO_DOWNLOAD,
       Handlers.DHIS2_DATA_UPLOAD,
+      Handlers.DHIS2_ANALYTICS_RUN,
     ]);
     expect(plan.pipelines[0]!.steps[1]!.handlerConfig).toMatchObject({
       datasetId: "era5.precip",
@@ -116,10 +120,7 @@ describe("buildClimatePredictionPlan", () => {
       period: { mode: "rolling", periodType: "weekly", count: 12 },
       orgUnit: { levels: ["3"] },
     });
-    expect(plan.pipelines[1]!.steps.map((s) => s.handlerKey)).toEqual([
-      Handlers.DHIS2_ANALYTICS_RUN,
-    ]);
-    expect(plan.join).toEqual({ kind: "connector", source: "climate", target: "prediction" });
+    expect(plan.join).toBeNull();
   });
 
   it("with a pull and a setup: both data pipelines merge into the prediction", () => {
@@ -132,9 +133,9 @@ describe("buildClimatePredictionPlan", () => {
     );
 
     expect(plan.pipelines.map((p) => p.name)).toEqual([
-      "Malawi · Climate data",
-      "Malawi · Disease data",
-      "Malawi · Prediction",
+      "Fetch weekly climate data from Open Climate Service · Malawi",
+      "Pull data from HMIS · Malawi",
+      'Run analytics and the "EWARS weekly" prediction · Malawi',
     ]);
     // The setup's org units replace the chosen ones everywhere
     expect(plan.pipelines[0]!.steps[1]!.handlerConfig.orgUnit).toEqual({ ids: setup.orgUnits });
@@ -156,6 +157,7 @@ describe("buildClimatePredictionPlan", () => {
     });
     expect(plan.join).toEqual({
       kind: "merge",
+      name: "Wait for climate data and pulled data, then predict",
       sources: ["climate", "disease"],
       target: "prediction",
     });
@@ -184,6 +186,102 @@ describe("buildClimatePredictionPlan", () => {
         success: true,
       });
     }
+  });
+});
+
+describe("names and options", () => {
+  it("names a climate variable after its data element when it has no label", () => {
+    const plan = buildClimatePredictionPlan(
+      params({ climate: [{ datasetId: "era5.precip", dataElement: RAIN }] }),
+      null,
+      { dataElementNames: { [RAIN]: "Rainfall" } }
+    );
+    expect(plan.pipelines[0]!.steps[1]!.name).toBe("Request Rainfall from Open Climate Service");
+  });
+
+  it("names steps after the variable's label and describes every step", () => {
+    const plan = buildClimatePredictionPlan(
+      params({
+        climate: [{ datasetId: "era5.precip", dataElement: RAIN, label: "Rainfall" }],
+      }),
+      null
+    );
+    const climate = plan.pipelines[0]!;
+    expect(climate.description).toBe(
+      "Fetches the last 12 weeks of Rainfall for every org unit at level 3 from Open Climate Service and saves them in staging."
+    );
+    expect(climate.steps.map((s) => s.name)).toEqual([
+      "Update climate datasets",
+      "Request Rainfall from Open Climate Service",
+      "Wait for Rainfall to be calculated",
+      "Download Rainfall values",
+      "Save Rainfall to staging",
+      "Run analytics in staging",
+    ]);
+    expect(climate.steps.every((s) => s.description.length > 0)).toBe(true);
+  });
+
+  it("pulls on its own, named after the instance and the data elements", () => {
+    const plan = buildClimatePredictionPlan(params({ climate: [], disease: pulled }), null, {
+      instanceName: "National HMIS",
+      dataElementNames: { [CASES]: "Malaria cases" },
+    });
+    expect(plan.pipelines.map((p) => p.name)).toEqual([
+      "Pull Malaria cases from National HMIS · Malawi",
+    ]);
+    expect(plan.pipelines[0]!.steps.map((s) => s.handlerKey)).toEqual([
+      Handlers.DHIS2_INSTANCE_PULL,
+      Handlers.DHIS2_DATA_UPLOAD,
+      Handlers.DHIS2_ANALYTICS_RUN,
+    ]);
+    expect(plan.join).toBeNull();
+  });
+
+  it("predicts on its own: start, wait, tell the modeller", () => {
+    const plan = buildClimatePredictionPlan(
+      params({
+        climate: [],
+        prediction: { predictionSetupId: 7, notify: { users: ["ModellerUs1"] } },
+      }),
+      setup
+    );
+    expect(plan.pipelines.map((p) => p.name)).toEqual([
+      'Run the "EWARS weekly" prediction · Malawi',
+    ]);
+    expect(plan.pipelines[0]!.steps.map((s) => s.handlerKey)).toEqual([
+      Handlers.PREDICTION_TRIGGER,
+      Handlers.PREDICTION_POLL,
+      Handlers.DHIS2_NOTIFY,
+    ]);
+  });
+
+  it("without analytics, two data pipelines run side by side with no join", () => {
+    const plan = buildClimatePredictionPlan(params({ disease: pulled, runAnalytics: false }), null);
+    expect(plan.pipelines.map((p) => p.role)).toEqual(["climate", "disease"]);
+    expect(plan.join).toBeNull();
+    for (const pipeline of plan.pipelines) {
+      expect(pipeline.steps.map((s) => s.handlerKey)).not.toContain(Handlers.DHIS2_ANALYTICS_RUN);
+    }
+  });
+
+  it("tells the team when the last pipeline succeeds, and anyone chosen when one fails", () => {
+    const team = { users: [], userGroups: ["DataTeamGr1"] };
+    const plan = buildClimatePredictionPlan(
+      params({ disease: pulled, notify: { onSuccess: team, onFailure: team } }),
+      null
+    );
+    expect(plan.pipelines.map((p) => p.steps.at(-1)!.handlerKey)).toEqual([
+      Handlers.DHIS2_DATA_UPLOAD,
+      Handlers.DHIS2_DATA_UPLOAD,
+      Handlers.DHIS2_NOTIFY,
+    ]);
+    expect(plan.pipelines.map((p) => p.onFailure)).toEqual([team, team, team]);
+  });
+
+  it("needs climate data, a pull or a prediction setup", () => {
+    expect(climatePredictionParamsSchema.safeParse({ ...params(), climate: [] }).success).toBe(
+      false
+    );
   });
 });
 

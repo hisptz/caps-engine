@@ -38,12 +38,16 @@ const setup: TemplatePredictionSetup = {
 
 const lookups = {
   predictionSetup: vi.fn(async (id: number) => ({ setup: id === setup.id ? setup : null })),
-  missingDataElements: vi.fn<(ids: string[]) => Promise<string[] | null>>(async () => []),
+  dataElementNames: vi.fn<(ids: string[]) => Promise<Record<string, string> | null>>(async () => ({
+    [RAIN]: "Rainfall",
+    [CASES]: "Malaria cases",
+  })),
   routeReachable: vi.fn(async () => true),
   pulledFromInstance: vi.fn(async () => new Set<string>()),
   climateDatasets: vi.fn<() => Promise<{ id: string; periodType: string | null }[] | null>>(
     async () => [{ id: "era5.precip", periodType: "daily" }]
   ),
+  instanceName: vi.fn<(routeCode: string) => Promise<string | null>>(async () => "HMIS"),
 };
 
 let prisma: PrismaClient;
@@ -94,7 +98,7 @@ async function expectApiError(promise: Promise<unknown>, code: string) {
 
 describe("TemplateService.preview", () => {
   it("lists every problem instead of stopping at the first", async () => {
-    lookups.missingDataElements.mockResolvedValueOnce([RAIN]);
+    lookups.dataElementNames.mockResolvedValueOnce({ [CASES]: "Malaria cases" });
     lookups.routeReachable.mockResolvedValueOnce(false);
 
     const preview = await service.preview("climate-prediction", params({ disease: pulled }));
@@ -128,12 +132,12 @@ describe("TemplateService.create", () => {
     });
 
     expect(workflow.template).toBe("climate-prediction");
-    expect(workflow.pipelines.map((p) => p.name.split(" · ")[1])).toEqual([
-      "Climate data",
-      "Disease data",
-      "Prediction",
+    expect(workflow.pipelines.map((p) => p.name.split(" · ")[0])).toEqual([
+      "Fetch weekly climate data from Open Climate Service",
+      "Pull Malaria cases from HMIS",
+      'Run analytics and the "EWARS weekly" prediction',
     ]);
-    const prediction = workflow.pipelines.find((p) => p.name.endsWith("Prediction"))!;
+    const prediction = workflow.pipelines.find((p) => p.name.startsWith("Run analytics"))!;
     expect(prediction.steps.map((s) => s.handlerKey)).toEqual([
       Handlers.DHIS2_ANALYTICS_RUN,
       Handlers.PREDICTION_TRIGGER,
@@ -172,7 +176,7 @@ describe("TemplateService.create", () => {
     const execution = await prisma.pipelineExecution.findUniqueOrThrow({
       where: { id: backfillRun!.started[0]!.executionId },
     });
-    const climate = workflow.pipelines.find((p) => p.name.endsWith("Climate data"))!;
+    const climate = workflow.pipelines.find((p) => p.name.startsWith("Fetch"))!;
     const requestStep = climate.steps[1]!;
     expect(execution.context).toMatchObject({
       steps: {
@@ -185,34 +189,41 @@ describe("TemplateService.create", () => {
 });
 
 describe("TemplateService.updateSetup", () => {
-  it("adds the prediction to the same pipeline once a setup is chosen", async () => {
+  it("moves analytics into a new prediction pipeline once a setup is chosen", async () => {
     const first = params();
     const { workflow } = await service.create("climate-prediction", { params: first });
-    const predictionId = workflow.pipelines.find((p) => p.name.endsWith("Prediction"))!.id;
-    const analyticsStepId = workflow.pipelines.find((p) => p.id === predictionId)!.steps[0]!.id;
+    expect(workflow.pipelines).toHaveLength(1);
+    expect(workflow.connectors).toHaveLength(0);
+    const climateId = workflow.pipelines[0]!.id;
+    const requestStepId = workflow.pipelines[0]!.steps[1]!.id;
+    expect(workflow.pipelines[0]!.steps.at(-1)!.handlerKey).toBe(Handlers.DHIS2_ANALYTICS_RUN);
 
     const updated = await service.updateSetup(workflow.id, {
       params: { ...first, prediction: { predictionSetupId: 7 } },
       force: false,
     });
 
-    const prediction = updated.pipelines.find((p) => p.id === predictionId)!;
+    const climate = updated.pipelines.find((p) => p.id === climateId)!;
+    expect(climate.steps.map((s) => s.handlerKey)).not.toContain(Handlers.DHIS2_ANALYTICS_RUN);
+    // The steps that stay keep their ids, and so their run history
+    expect(climate.steps[1]!.id).toBe(requestStepId);
+    // Org units now come from the setup
+    expect(climate.steps[1]!.handlerConfig).toMatchObject({ orgUnit: { ids: setup.orgUnits } });
+
+    const prediction = updated.pipelines.find((p) => p.id !== climateId)!;
     expect(prediction.steps.map((s) => s.handlerKey)).toEqual([
       Handlers.DHIS2_ANALYTICS_RUN,
       Handlers.PREDICTION_TRIGGER,
       Handlers.PREDICTION_POLL,
     ]);
-    // The step that stays keeps its id, and so its run history
-    expect(prediction.steps[0]!.id).toBe(analyticsStepId);
-    // Org units now come from the setup
-    const climate = updated.pipelines.find((p) => p.name.endsWith("Climate data"))!;
-    expect(climate.steps[1]!.handlerConfig).toMatchObject({ orgUnit: { ids: setup.orgUnits } });
+    expect(updated.connectors).toHaveLength(1);
+    expect(updated.connectors[0]!.name).toBe("After climate data, predict");
   });
 
   it("switches the join when disease data starts being pulled, and back", async () => {
     const first = params();
     const { workflow } = await service.create("climate-prediction", { params: first });
-    expect(workflow.connectors).toHaveLength(1);
+    expect(workflow.pipelines).toHaveLength(1);
 
     const pulling = await service.updateSetup(workflow.id, {
       params: { ...first, disease: pulled },
@@ -223,11 +234,38 @@ describe("TemplateService.updateSetup", () => {
     expect(pulling.merges).toHaveLength(1);
 
     const back = await service.updateSetup(workflow.id, { params: first, force: false });
-    expect(back.pipelines).toHaveLength(2);
+    expect(back.pipelines).toHaveLength(1);
     expect(back.merges).toHaveLength(0);
-    expect(back.connectors).toHaveLength(1);
-    // The disease pipeline never ran, so it is gone rather than kept switched off
-    expect(await prisma.pipeline.count()).toBe(2);
+    expect(back.connectors).toHaveLength(0);
+    // The pull and analytics pipelines never ran, so they are gone rather than kept switched off
+    expect(await prisma.pipeline.count()).toBe(1);
+  });
+
+  it("pulls on its own, with step descriptions and a failure notice", async () => {
+    const { workflow } = await service.create("climate-prediction", {
+      params: params({
+        climate: [],
+        disease: pulled,
+        notify: { onFailure: { userGroups: ["DataTeamGr1"] } },
+      }),
+    });
+
+    expect(workflow.pipelines).toHaveLength(1);
+    const pull = await prisma.pipeline.findUniqueOrThrow({
+      where: { id: workflow.pipelines[0]!.id },
+      include: { steps: { orderBy: { stepOrder: "asc" } } },
+    });
+    expect(pull.name.split(" · ")[0]).toBe("Pull Malaria cases from HMIS");
+    expect(pull.steps.map((s) => s.name)).toEqual([
+      "Pull Malaria cases from HMIS",
+      "Save Malaria cases to staging",
+      "Run analytics in staging",
+    ]);
+    expect(pull.steps.every((s) => s.description)).toBe(true);
+    expect(pull.config).toEqual({
+      notifications: { onFailure: { users: [], userGroups: ["DataTeamGr1"] } },
+    });
+    expect(lookups.instanceName).toHaveBeenCalledWith("caps-src-hmis");
   });
 
   it("shows the name and schedule the workflow has now, not the ones it was made with", async () => {
@@ -246,7 +284,7 @@ describe("TemplateService.updateSetup", () => {
   it("refuses to overwrite steps changed by hand unless forced", async () => {
     const first = params();
     const { workflow } = await service.create("climate-prediction", { params: first });
-    const climate = workflow.pipelines.find((p) => p.name.endsWith("Climate data"))!;
+    const climate = workflow.pipelines.find((p) => p.name.startsWith("Fetch"))!;
     await prisma.pipelineStep.update({
       where: { id: climate.steps[4]!.id },
       data: { handlerConfig: { importStrategy: "CREATE" } },

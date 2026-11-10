@@ -12,6 +12,7 @@ import { ClimateService } from "@/services/api/modules/climate/service.ts";
 import { nextRunAt, WorkflowService } from "@/services/api/modules/workflows/service.ts";
 import { pullItemTarget } from "@/services/worker/services/handlers/dhis2InstancePull/schemas/config.ts";
 import { MappingDirection } from "@db/client";
+import { hasRecipients } from "@/shared/pipeline/notifications.ts";
 import {
   buildClimatePredictionPlan,
   checkAgainstSetup,
@@ -38,13 +39,15 @@ type Tx = Prisma.TransactionClient;
 /** Outside lookups the checks need; replaced in tests. */
 export type TemplateLookups = {
   predictionSetup(id: number): Promise<{ setup: TemplatePredictionSetup | null; error?: string }>;
-  /** Data elements not found in staging; null when they could not be checked */
-  missingDataElements(ids: string[]): Promise<string[] | null>;
+  /** Names of the staging data elements found, by id; null when they could not be checked */
+  dataElementNames(ids: string[]): Promise<Record<string, string> | null>;
   routeReachable(routeCode: string): Promise<boolean>;
   /** Staging data elements the instance's pull mappings fill */
   pulledFromInstance(routeCode: string): Promise<Set<string>>;
   /** Datasets Open Climate Service has ingested; null when OCS could not be reached */
   climateDatasets(): Promise<ClimateDataset[] | null>;
+  /** The connected instance's name for pipeline names; null when it cannot be read */
+  instanceName(routeCode: string): Promise<string | null>;
 };
 
 type StacCollection = {
@@ -80,14 +83,14 @@ export const defaultLookups: TemplateLookups = {
       },
     };
   },
-  async missingDataElements(ids) {
+  async dataElementNames(ids) {
     try {
-      const { data } = await dhis2RestClient.get<{ dataElements?: { id: string }[] }>(
-        "/dataElements",
-        { params: { filter: `id:in:[${ids.join(",")}]`, fields: "id", paging: false } }
-      );
-      const found = new Set((data.dataElements ?? []).map((d) => d.id));
-      return ids.filter((id) => !found.has(id));
+      const { data } = await dhis2RestClient.get<{
+        dataElements?: { id: string; displayName: string }[];
+      }>("/dataElements", {
+        params: { filter: `id:in:[${ids.join(",")}]`, fields: "id,displayName", paging: false },
+      });
+      return Object.fromEntries((data.dataElements ?? []).map((d) => [d.id, d.displayName]));
     } catch {
       return null;
     }
@@ -101,6 +104,16 @@ export const defaultLookups: TemplateLookups = {
       select: { stagingDataElement: true },
     });
     return new Set(mappings.map((m) => m.stagingDataElement));
+  },
+  async instanceName(routeCode) {
+    try {
+      const { data } = await dhis2RestClient.get<{ routes?: { name?: string }[] }>("/routes", {
+        params: { filter: `code:eq:${routeCode}`, fields: "name", paging: false },
+      });
+      return data.routes?.[0]?.name ?? null;
+    } catch {
+      return null;
+    }
   },
   async climateDatasets() {
     try {
@@ -125,11 +138,22 @@ const TEMPLATES = [
     id: CLIMATE_PREDICTION_TEMPLATE,
     name: "Climate → Prediction",
     description:
-      "Fetch climate data (and disease data from another instance, if needed) in parallel, then run analytics and a CHAP prediction and tell the modeller",
+      "Fetch climate data, pull data from a connected instance, or both; run analytics; and, with a CHAP prediction setup, predict and tell the modeller",
   },
 ];
 
 const MERGE_TIMEOUT_MINUTES = 12 * 60;
+
+/** The pipeline's config with the template's failure notice set, or removed when nobody is told. */
+function withFailureNotice(config: unknown, planned: PlannedPipeline): Record<string, unknown> {
+  const { notifications, ...rest } = (config ?? {}) as Record<string, unknown>;
+  const others = { ...((notifications as Record<string, unknown> | undefined) ?? {}) };
+  delete others.onFailure;
+  const next = hasRecipients(planned.onFailure)
+    ? { ...others, onFailure: planned.onFailure }
+    : others;
+  return Object.keys(next).length > 0 ? { ...rest, notifications: next } : rest;
+}
 
 function isPrismaDuplicate(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
@@ -199,15 +223,13 @@ export class TemplateService {
 
     const written = this.dataElementsWritten(params);
     const mapped = params.disease.source === "instance" ? params.disease.mapped : undefined;
-    const [missing, reachable, datasets, pulled] = await Promise.all([
-      this.lookups.missingDataElements([...written.keys()]),
-      params.disease.source === "instance"
-        ? this.lookups.routeReachable(params.disease.routeCode)
-        : Promise.resolve(true),
-      this.lookups.climateDatasets(),
-      mapped && params.disease.source === "instance"
-        ? this.lookups.pulledFromInstance(params.disease.routeCode)
-        : Promise.resolve(null),
+    const routeCode = params.disease.source === "instance" ? params.disease.routeCode : null;
+    const [dataElementNames, reachable, datasets, pulled, instanceName] = await Promise.all([
+      written.size > 0 ? this.lookups.dataElementNames([...written.keys()]) : {},
+      routeCode ? this.lookups.routeReachable(routeCode) : Promise.resolve(true),
+      params.climate.length > 0 ? this.lookups.climateDatasets() : Promise.resolve([]),
+      mapped && routeCode ? this.lookups.pulledFromInstance(routeCode) : Promise.resolve(null),
+      routeCode ? this.lookups.instanceName(routeCode) : Promise.resolve(null),
     ]);
     const notPulled = mapped && pulled ? mapped.filter((id) => !pulled.has(id)) : [];
     if (notPulled.length > 0) {
@@ -216,7 +238,9 @@ export class TemplateService {
         message: `Not pulled from this instance: ${notPulled.join(", ")}. Map them under Settings › Connected instances › Mappings.`,
       });
     }
-    if (missing === null) {
+    const missing =
+      dataElementNames && [...written.keys()].filter((id) => !(id in dataElementNames));
+    if (!missing) {
       warnings.push({ path: "", message: "Could not check the data elements in staging" });
     } else {
       for (const id of missing) {
@@ -245,7 +269,10 @@ export class TemplateService {
     if (params.prediction && !setup) {
       return { params, setup, plan: null, errors, warnings };
     }
-    const plan = buildClimatePredictionPlan(params, setup);
+    const plan = buildClimatePredictionPlan(params, setup, {
+      instanceName,
+      dataElementNames: dataElementNames ?? {},
+    });
     for (const pipeline of plan.pipelines) {
       pipeline.steps.forEach((step, index) => {
         const result = validateHandlerConfig(step.handlerKey, step.handlerConfig);
@@ -469,6 +496,7 @@ export class TemplateService {
       data: {
         name: planned.name,
         description: planned.description,
+        config: withFailureNotice({}, planned) as Prisma.InputJsonObject,
         workflowId,
         steps: {
           create: planned.steps.map((step, index) => ({
@@ -487,9 +515,17 @@ export class TemplateService {
    * their run history; extra old steps are removed.
    */
   private async replaceSteps(tx: Tx, pipelineId: string, planned: PlannedPipeline) {
+    const { config } = await tx.pipeline.findUniqueOrThrow({
+      where: { id: pipelineId },
+      select: { config: true },
+    });
     await tx.pipeline.update({
       where: { id: pipelineId },
-      data: { name: planned.name, description: planned.description },
+      data: {
+        name: planned.name,
+        description: planned.description,
+        config: withFailureNotice(config, planned) as Prisma.InputJsonObject,
+      },
     });
     const current = await tx.pipelineStep.findMany({
       where: { pipelineId },
@@ -504,6 +540,7 @@ export class TemplateService {
     for (const [index, step] of planned.steps.entries()) {
       const data = {
         name: step.name,
+        description: step.description,
         handlerKey: step.handlerKey,
         handlerConfig: step.handlerConfig as Prisma.InputJsonObject,
         stepOrder: index,
@@ -551,7 +588,7 @@ export class TemplateService {
 
   private async joinStillFits(tx: Tx, previous: TemplateState, plan: TemplatePlan) {
     const join = previous.join;
-    if (!join || join.kind !== plan.join.kind) return false;
+    if (!join || !plan.join || join.kind !== plan.join.kind) return false;
     // Same kind joins the same roles; it fits as long as those pipelines are kept
     const roles: PipelineRole[] =
       plan.join.kind === "merge"
@@ -582,10 +619,11 @@ export class TemplateService {
   ): Promise<TemplateState["join"]> {
     const idOf = (role: PipelineRole) => state.pipelines[role]!.id;
     const join = plan.join;
+    if (!join) return null;
     if (join.kind === "merge") {
       const merge = await tx.pipelineMerge.create({
         data: {
-          name: `${plan.workflow.name}: data ready`,
+          name: join.name,
           workflowId,
           targetPipelineId: idOf(join.target),
           triggerRule: MergeTriggerRule.ALL_SUCCEEDED,
@@ -597,7 +635,7 @@ export class TemplateService {
     }
     const connector = await tx.pipelineConnector.create({
       data: {
-        name: `${plan.workflow.name}: data ready`,
+        name: join.name,
         sourcePipelineId: idOf(join.source),
         targetPipelineId: idOf(join.target),
       },
