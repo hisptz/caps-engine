@@ -1,0 +1,72 @@
+name: Use case / user story
+description: Tell us what you need CAPS to do in your country or programme
+title: "[use case] "
+labels: ["use-case"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping shape CAPS. No technical knowledge needed: describe the need in your own words and we will work out the details with you.
+        For a bug, use **Bug report**. For a change to the engine itself, use **Feature request**.
+  - type: input
+    id: who
+    attributes:
+      label: Who you are
+      description: Your role and organisation, for example "HMIS officer, Ministry of Health"
+    validations:
+      required: true
+  - type: input
+    id: country
+    attributes:
+      label: Country or programme
+      placeholder: e.g. malaria programme
+    validations:
+      required: true
+  - type: textarea
+    id: story
+    attributes:
+      label: User story
+      description: As a ..., I want ..., so that ...
+      placeholder: As a district health officer, I want a weekly dengue forecast on our dashboard, so that we can plan vector control before cases rise.
+    validations:
+      required: true
+  - type: input
+    id: disease
+    attributes:
+      label: Disease or health topic
+      placeholder: e.g. malaria, dengue, cholera, heat-related illness
+  - type: textarea
+    id: data
+    attributes:
+      label: Data you have
+      description: Where the disease data lives (which DHIS2 instance) and any climate data you already use
+      placeholder: Weekly confirmed cases in our national DHIS2; rainfall from the national met service
+  - type: checkboxes
+    id: outputs
+    attributes:
+      label: What should come out
+      options:
+        - label: Forecast pushed to our DHIS2
+        - label: Forecast on a DHIS2 dashboard
+        - label: Bulletin (PDF, email or WhatsApp)
+        - label: Notification when a forecast is ready or a run fails
+        - label: Something else (describe below)
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often
+      options:
+        - Weekly
+        - Monthly
+        - On demand
+        - Not sure yet
+  - type: textarea
+    id: today
+    attributes:
+      label: How you do this today
+      description: Optional. What is manual, slow or missing right now?
+  - type: textarea
+    id: other
+    attributes:
+      label: Anything else
+      description: Optional. Deadlines, partners involved, or a link to a related document.
