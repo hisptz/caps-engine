@@ -1,3 +1,9 @@
+# [3.3.0](https://github.com/hisptz/caps-engine/compare/v3.2.2...v3.3.0) (2026-11-11)
+
+### Features
+
+- support for workflow implementation ([#18](https://github.com/hisptz/caps-engine/issues/18)) ([0466652](https://github.com/hisptz/caps-engine/commit/0466652eb682a38af185e9da3d21d03cefac1a6f))
+
 ## [3.2.2](https://github.com/hisptz/caps-engine/compare/v3.2.1...v3.2.2) (2026-11-05)
 
 ### Bug Fixes
