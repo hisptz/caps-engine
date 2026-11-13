@@ -68,8 +68,8 @@ describe("ClimateService.listCollections", () => {
   const catalog = {
     type: "Catalog",
     links: [
-      { rel: "self", href: "http://ocs.example/stac" },
-      { rel: "child", href: "http://ocs.example/stac/collections/chirps3_precipitation_daily" },
+      { rel: "self", href: "http://ocs.example/stac/catalog.json" },
+      { rel: "child", href: "http://ocs.example/stac/chirps3_precipitation_daily/collection.json" },
       { rel: "child", href: "http://ocs.example/stac/collections/era5_land_temperature/" },
     ],
   };
@@ -85,9 +85,9 @@ describe("ClimateService.listCollections", () => {
     expect(result).toEqual({
       collections: [{ id: "chirps3_precipitation_daily" }, { id: "era5_land_temperature" }],
     });
-    expect(mockGet).toHaveBeenNthCalledWith(1, "/stac");
-    expect(mockGet).toHaveBeenCalledWith("/stac/collections/chirps3_precipitation_daily");
-    expect(mockGet).toHaveBeenCalledWith("/stac/collections/era5_land_temperature");
+    expect(mockGet).toHaveBeenNthCalledWith(1, "/stac/catalog.json");
+    expect(mockGet).toHaveBeenCalledWith("/stac/chirps3_precipitation_daily/collection.json");
+    expect(mockGet).toHaveBeenCalledWith("/stac/era5_land_temperature/collection.json");
   });
 
   it("skips a collection that fails to load", async () => {
@@ -129,7 +129,7 @@ describe("ClimateService.getCollection", () => {
     const result = await climateService.getCollection("chirps3_precipitation_daily");
 
     expect(result).toEqual(collection);
-    expect(mockGet).toHaveBeenCalledWith("/stac/collections/chirps3_precipitation_daily");
+    expect(mockGet).toHaveBeenCalledWith("/stac/chirps3_precipitation_daily/collection.json");
   });
 
   it("throws a 404 ApiError when the collection is not published", async () => {
