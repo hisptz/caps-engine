@@ -1,3 +1,9 @@
+## [3.3.1](https://github.com/hisptz/caps-engine/compare/v3.3.0...v3.3.1) (2026-11-13)
+
+### Bug Fixes
+
+- update STAC API paths to use new static layout format ([e1c9511](https://github.com/hisptz/caps-engine/commit/e1c95115f93403c7c8b5c59349a03143cdf1928b))
+
 # [3.3.0](https://github.com/hisptz/caps-engine/compare/v3.2.2...v3.3.0) (2026-11-11)
 
 ### Features
