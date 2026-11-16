@@ -196,7 +196,6 @@ Names below come from `.env.example`, `docker-compose.yml`, and `src/shared/sche
 | `CHAP_BASE_URL`                                        | CHAP HTTP API                         | **Required** in `env.ts`                                     |
 | `CHAP_API_TOKEN`                                       | Optional CHAP token                   | Empty in `.env.example`                                      |
 | `CLIMATE_API_BASE_URL`                                 | Climate HTTP API                      | `.env.example`: `http://localhost:8001`                      |
-| `CLIMATE_DATA_BASE_URL`                                | Climate data service                  | `.env.example`: `http://localhost:8081`                      |
 | `OUTPUTS_DIR`                                          | Worker output dir                     | `./outputs`; Compose workers use `/tmp/caps-outputs`         |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`                          | OTLP exporter                         | Empty in `.env.example`                                      |
 | `NODE_ENV`                                             | Runtime label                         | `.env.example`: `production` (not in `env.ts`)               |

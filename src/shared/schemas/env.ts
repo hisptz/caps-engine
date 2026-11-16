@@ -11,6 +11,5 @@ export const envSchema = z.object({
   CHAP_API_TOKEN: z.string().optional(),
   OUTPUTS_DIR: z.string().default("./outputs"),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().default(""),
-  CLIMATE_DATA_BASE_URL: z.url().default("http://localhost:8081"),
   CLIMATE_API_BASE_URL: z.url().default("http://localhost:8001"),
 });
