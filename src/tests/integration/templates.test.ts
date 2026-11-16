@@ -42,6 +42,9 @@ const lookups = {
     [RAIN]: "Rainfall",
     [CASES]: "Malaria cases",
   })),
+  dataElementPeriodTypes: vi.fn<(ids: string[]) => Promise<Record<string, string[]> | null>>(
+    async () => ({})
+  ),
   routeReachable: vi.fn(async () => true),
   pulledFromInstance: vi.fn(async () => new Set<string>()),
   climateDatasets: vi.fn<() => Promise<{ id: string; periodType: string | null }[] | null>>(
@@ -258,8 +261,8 @@ describe("TemplateService.updateSetup", () => {
     expect(pull.name.split(" · ")[0]).toBe("Pull Malaria cases from HMIS");
     expect(pull.steps.map((s) => s.name)).toEqual([
       "Pull Malaria cases from HMIS",
-      "Save Malaria cases to staging",
-      "Run analytics in staging",
+      "Upload Malaria cases",
+      "Run analytics",
     ]);
     expect(pull.steps.every((s) => s.description)).toBe(true);
     expect(pull.config).toEqual({

@@ -333,6 +333,30 @@ export function checkClimateDatasets(
   });
 }
 
+/**
+ * A data element in data sets of other period types only, e.g. one in a weekly data set filled
+ * by a monthly workflow: the values import but the data set's forms and reports do not show
+ * them. A data element in no data set, or in at least one that matches, is left alone.
+ */
+export function checkDataElementPeriods(
+  params: ClimatePredictionParams,
+  written: Map<string, string>,
+  periodTypes: Record<string, string[]>,
+  names: Record<string, string> = {}
+): TemplateIssue[] {
+  const wanted = params.periodType.toLowerCase();
+  return [...written].flatMap(([id, path]): TemplateIssue[] => {
+    const types = [...new Set(periodTypes[id] ?? [])];
+    if (types.length === 0 || types.some((t) => t.toLowerCase() === wanted)) return [];
+    return [
+      {
+        path,
+        message: `"${names[id] ?? id}" is only in ${listWords(types)} data sets; this workflow uploads ${wanted} values into it`,
+      },
+    ];
+  });
+}
+
 function orgUnitSelection(
   params: ClimatePredictionParams,
   setup: TemplatePredictionSetup | null
@@ -346,12 +370,12 @@ const DEFAULT_IMPORT = { importStrategy: "CREATE_AND_UPDATE" };
 const plural = (count: number, one: string, many = `${one}s`) =>
   `${count} ${count === 1 ? one : many}`;
 
-/** "the latest week", "the last 12 months" */
+/** "the last complete week", "the last 12 complete months": the current period is left out */
 function recentPhrase(params: ClimatePredictionParams): string {
   const unit = params.periodType === "WEEKLY" ? "week" : "month";
   return params.recentPeriods === 1
-    ? `the latest ${unit}`
-    : `the last ${params.recentPeriods} ${unit}s`;
+    ? `the last complete ${unit}`
+    : `the last ${params.recentPeriods} complete ${unit}s`;
 }
 
 function orgUnitPhrase(params: ClimatePredictionParams, setup: TemplatePredictionSetup | null) {
@@ -401,7 +425,7 @@ function pulledLabel(params: ClimatePredictionParams, names: TemplateNames): str
 }
 
 const ANALYTICS_STEP: PlannedStep = {
-  name: "Run analytics in staging",
+  name: "Run analytics",
   description:
     "Rebuilds the analytics tables in staging so the new values show in dashboards and can be used by CHAP.",
   handlerKey: Handlers.DHIS2_ANALYTICS_RUN,
@@ -433,7 +457,7 @@ function climatePipeline(
   return {
     role: "climate",
     name: `Fetch ${period} climate data from Open Climate Service${suffix}`,
-    description: `Fetches ${recentPhrase(params)} of ${listWords(labels)} for ${orgUnitPhrase(params, setup)} from Open Climate Service and saves them in staging.`,
+    description: `Fetches ${recentPhrase(params)} of ${listWords(labels)} for ${orgUnitPhrase(params, setup)} from Open Climate Service and uploads them to staging.`,
     onFailure: params.notify.onFailure,
     steps: [
       // OCS can only serve what it has ingested; bring every dataset up to date first
@@ -481,8 +505,8 @@ function climatePipeline(
             handlerConfig: {},
           },
           {
-            name: `Save ${label} to staging`,
-            description: `Imports the values into data element ${variable.dataElement} (create and update).`,
+            name: `Upload ${label}`,
+            description: `Uploads the values to data element ${variable.dataElement} in staging (create and update).`,
             handlerKey: Handlers.DHIS2_DATA_UPLOAD,
             handlerConfig: DEFAULT_IMPORT,
           },
@@ -506,7 +530,7 @@ function pullPipeline(
   return {
     role: "disease",
     name: `Pull ${label} from ${instance}${suffix}`,
-    description: `Pulls ${recentPhrase(params)} of ${label} from ${instance} for ${orgUnitPhrase(params, setup)} and saves them in staging.`,
+    description: `Pulls ${recentPhrase(params)} of ${label} from ${instance} for ${orgUnitPhrase(params, setup)} and uploads them to staging.`,
     onFailure: params.notify.onFailure,
     steps: [
       {
@@ -530,8 +554,8 @@ function pullPipeline(
         },
       },
       {
-        name: `Save ${label} to staging`,
-        description: "Imports the pulled values into staging (create and update).",
+        name: `Upload ${label}`,
+        description: "Uploads the pulled values to staging (create and update).",
         handlerKey: Handlers.DHIS2_DATA_UPLOAD,
         handlerConfig: DEFAULT_IMPORT,
       },
@@ -550,7 +574,7 @@ function finalPipeline(
   if (!prediction || !setup) {
     return {
       role: "prediction",
-      name: `Run analytics in staging${suffix}`,
+      name: `Run analytics${suffix}`,
       description:
         "Rebuilds the analytics tables in staging once all the data is in, so it shows in dashboards and can be used by CHAP.",
       onFailure: params.notify.onFailure,

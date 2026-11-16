@@ -3,6 +3,7 @@ import {
   buildClimatePredictionPlan,
   checkAgainstSetup,
   checkClimateDatasets,
+  checkDataElementPeriods,
   climatePredictionParamsSchema,
   stepsFingerprint,
   type TemplatePredictionSetup,
@@ -208,15 +209,15 @@ describe("names and options", () => {
     );
     const climate = plan.pipelines[0]!;
     expect(climate.description).toBe(
-      "Fetches the last 12 weeks of Rainfall for every org unit at level 3 from Open Climate Service and saves them in staging."
+      "Fetches the last 12 complete weeks of Rainfall for every org unit at level 3 from Open Climate Service and uploads them to staging."
     );
     expect(climate.steps.map((s) => s.name)).toEqual([
       "Update climate datasets",
       "Request Rainfall from Open Climate Service",
       "Wait for Rainfall to be calculated",
       "Download Rainfall values",
-      "Save Rainfall to staging",
-      "Run analytics in staging",
+      "Upload Rainfall",
+      "Run analytics",
     ]);
     expect(climate.steps.every((s) => s.description.length > 0)).toBe(true);
   });
@@ -370,5 +371,34 @@ describe("checkClimateDatasets", () => {
           'Open Climate Service has no dataset "missing"; ingest it on the Climate data page first',
       },
     ]);
+  });
+});
+
+describe("checkDataElementPeriods", () => {
+  const written = new Map([
+    [RAIN, "climate.0.dataElement"],
+    [TEMP, "climate.1.dataElement"],
+  ]);
+
+  it("warns about a data element only in data sets of another period type", () => {
+    const issues = checkDataElementPeriods(
+      params({ periodType: "MONTHLY" }),
+      written,
+      { [RAIN]: ["Weekly", "Weekly"], [TEMP]: ["Monthly"] },
+      { [RAIN]: "Rainfall - Weekly" }
+    );
+    expect(issues).toEqual([
+      {
+        path: "climate.0.dataElement",
+        message:
+          '"Rainfall - Weekly" is only in Weekly data sets; this workflow uploads monthly values into it',
+      },
+    ]);
+  });
+
+  it("leaves alone a data element in no data set, or in at least one that matches", () => {
+    expect(
+      checkDataElementPeriods(params(), written, { [RAIN]: [], [TEMP]: ["Monthly", "Weekly"] })
+    ).toEqual([]);
   });
 });

@@ -17,6 +17,7 @@ import {
   buildClimatePredictionPlan,
   checkAgainstSetup,
   checkClimateDatasets,
+  checkDataElementPeriods,
   CLIMATE_PREDICTION_TEMPLATE,
   climatePredictionParamsSchema,
   stepsFingerprint,
@@ -41,6 +42,8 @@ export type TemplateLookups = {
   predictionSetup(id: number): Promise<{ setup: TemplatePredictionSetup | null; error?: string }>;
   /** Names of the staging data elements found, by id; null when they could not be checked */
   dataElementNames(ids: string[]): Promise<Record<string, string> | null>;
+  /** Period types of the data sets each staging data element is in; null when not checked */
+  dataElementPeriodTypes(ids: string[]): Promise<Record<string, string[]> | null>;
   routeReachable(routeCode: string): Promise<boolean>;
   /** Staging data elements the instance's pull mappings fill */
   pulledFromInstance(routeCode: string): Promise<Set<string>>;
@@ -91,6 +94,29 @@ export const defaultLookups: TemplateLookups = {
         params: { filter: `id:in:[${ids.join(",")}]`, fields: "id,displayName", paging: false },
       });
       return Object.fromEntries((data.dataElements ?? []).map((d) => [d.id, d.displayName]));
+    } catch {
+      return null;
+    }
+  },
+  async dataElementPeriodTypes(ids) {
+    try {
+      const { data } = await dhis2RestClient.get<{
+        dataElements?: { id: string; dataSetElements?: { dataSet?: { periodType?: string } }[] }[];
+      }>("/dataElements", {
+        params: {
+          filter: `id:in:[${ids.join(",")}]`,
+          fields: "id,dataSetElements[dataSet[periodType]]",
+          paging: false,
+        },
+      });
+      return Object.fromEntries(
+        (data.dataElements ?? []).map((d) => [
+          d.id,
+          (d.dataSetElements ?? []).flatMap((e) =>
+            e.dataSet?.periodType ? [e.dataSet.periodType] : []
+          ),
+        ])
+      );
     } catch {
       return null;
     }
@@ -224,13 +250,15 @@ export class TemplateService {
     const written = this.dataElementsWritten(params);
     const mapped = params.disease.source === "instance" ? params.disease.mapped : undefined;
     const routeCode = params.disease.source === "instance" ? params.disease.routeCode : null;
-    const [dataElementNames, reachable, datasets, pulled, instanceName] = await Promise.all([
-      written.size > 0 ? this.lookups.dataElementNames([...written.keys()]) : {},
-      routeCode ? this.lookups.routeReachable(routeCode) : Promise.resolve(true),
-      params.climate.length > 0 ? this.lookups.climateDatasets() : Promise.resolve([]),
-      mapped && routeCode ? this.lookups.pulledFromInstance(routeCode) : Promise.resolve(null),
-      routeCode ? this.lookups.instanceName(routeCode) : Promise.resolve(null),
-    ]);
+    const [dataElementNames, periodTypes, reachable, datasets, pulled, instanceName] =
+      await Promise.all([
+        written.size > 0 ? this.lookups.dataElementNames([...written.keys()]) : {},
+        written.size > 0 ? this.lookups.dataElementPeriodTypes([...written.keys()]) : {},
+        routeCode ? this.lookups.routeReachable(routeCode) : Promise.resolve(true),
+        params.climate.length > 0 ? this.lookups.climateDatasets() : Promise.resolve([]),
+        mapped && routeCode ? this.lookups.pulledFromInstance(routeCode) : Promise.resolve(null),
+        routeCode ? this.lookups.instanceName(routeCode) : Promise.resolve(null),
+      ]);
     const notPulled = mapped && pulled ? mapped.filter((id) => !pulled.has(id)) : [];
     if (notPulled.length > 0) {
       errors.push({
@@ -249,6 +277,12 @@ export class TemplateService {
           message: `Data element ${id} does not exist in staging`,
         });
       }
+    }
+    // Only a hint: a data element can sit in several data sets, and import does not check it
+    if (periodTypes) {
+      warnings.push(
+        ...checkDataElementPeriods(params, written, periodTypes, dataElementNames ?? {})
+      );
     }
     if (datasets === null) {
       warnings.push({
