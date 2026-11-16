@@ -24,8 +24,22 @@ import type {
 
 type StacCatalog = { links?: Array<{ rel: string; href: string }> };
 
+const STAC_CATALOG_PATH = "/stac/catalog.json";
+
+function stacCollectionPath(id: string): string {
+  return `/stac/${encodeURIComponent(id)}/collection.json`;
+}
+
+/**
+ * Child links point at `.../stac/{id}/collection.json` (OCS static layout). The older
+ * `.../stac/collections/{id}` form is still accepted so a not-yet-updated OCS keeps working.
+ */
 function collectionIdFromHref(href: string): string | null {
-  const segment = href.split(/[?#]/)[0]?.replace(/\/+$/, "").split("/").pop();
+  const segments = (href.split(/[?#]/)[0] ?? "").replace(/\/+$/, "").split("/");
+  if (segments.at(-1) === "collection.json") {
+    segments.pop();
+  }
+  const segment = segments.pop();
   return segment ? decodeURIComponent(segment) : null;
 }
 
@@ -51,17 +65,13 @@ async function recordAcceptedJob(
 export class ClimateService {
   async listCollections(): Promise<{ collections: unknown[] }> {
     return handleClimateRequest(async () => {
-      const catalog = (await climateApiClient.get<StacCatalog>("/stac")).data;
+      const catalog = (await climateApiClient.get<StacCatalog>(STAC_CATALOG_PATH)).data;
       const ids = (catalog.links ?? [])
         .filter((link) => link.rel === "child")
         .map((link) => collectionIdFromHref(link.href))
         .filter((id): id is string => Boolean(id));
       const results = await Promise.allSettled(
-        ids.map(
-          async (id) =>
-            (await climateApiClient.get<unknown>(`/stac/collections/${encodeURIComponent(id)}`))
-              .data
-        )
+        ids.map(async (id) => (await climateApiClient.get<unknown>(stacCollectionPath(id))).data)
       );
       return {
         collections: results.flatMap((result) =>
@@ -73,7 +83,7 @@ export class ClimateService {
 
   async getCollection(id: string): Promise<unknown> {
     try {
-      const response = await climateApiClient.get(`/stac/collections/${encodeURIComponent(id)}`);
+      const response = await climateApiClient.get(stacCollectionPath(id));
       return response.data as unknown;
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.status === 404) {
