@@ -1,3 +1,9 @@
+## [3.3.2](https://github.com/hisptz/caps-engine/compare/v3.3.1...v3.3.2) (2026-11-16)
+
+### Bug Fixes
+
+- add data element period type checks and update related workflows - [#20](https://github.com/hisptz/caps-engine/issues/20)⁠ ([9f35ef7](https://github.com/hisptz/caps-engine/commit/9f35ef7c82d238cee857ccc830eb0f49c968e796))
+
 ## [3.3.1](https://github.com/hisptz/caps-engine/compare/v3.3.0...v3.3.1) (2026-11-13)
 
 ### Bug Fixes
