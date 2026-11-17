@@ -2,12 +2,10 @@ import { chunk } from "lodash-es";
 import { z } from "zod";
 import type { AxiosInstance } from "axios";
 import {
-  registerHandler,
   StepSkippedError,
   type StepContext,
   type StepHandler,
 } from "@/services/worker/types/service.ts";
-import { Handlers } from "@/services/worker/constants/handlers.ts";
 import { createRouteClient, describeRouteError, dhis2RestClient } from "@/shared/clients/dhis.ts";
 import { groupConflicts, StepError } from "@/shared/utils/error.ts";
 import type { DataValue, ImportSummary } from "@/services/worker/types/data.ts";
@@ -550,5 +548,3 @@ export const dhis2InstancePush: StepHandler = {
     return result;
   },
 };
-
-registerHandler(Handlers.DHIS2_INSTANCE_PUSH, dhis2InstancePush);

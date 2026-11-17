@@ -1,9 +1,4 @@
-import {
-  registerHandler,
-  StepSkippedError,
-  type StepHandler,
-} from "@/services/worker/types/service.ts";
-import { Handlers } from "@/services/worker/constants/handlers.ts";
+import { StepSkippedError, type StepHandler } from "@/services/worker/types/service.ts";
 import { env } from "@/shared/utils/env.ts";
 import path from "node:path";
 import type { TrackerImportBody, TrackerImportReport } from "@/services/worker/types/tracker.ts";
@@ -116,5 +111,3 @@ export const eventDataUpload: StepHandler = {
     return result;
   },
 };
-
-registerHandler(Handlers.EVENT_DATA_UPLOAD, eventDataUpload);

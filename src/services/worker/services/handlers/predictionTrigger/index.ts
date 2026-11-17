@@ -1,6 +1,5 @@
-import { registerHandler, type StepHandler } from "@/services/worker/types/service.ts";
+import type { StepHandler } from "@/services/worker/types/service.ts";
 import type { StepContext } from "@/services/worker/types/service.ts";
-import { Handlers } from "@/services/worker/constants/handlers.ts";
 import type {
   PredictionSetupRead,
   RunPredictionSetupRequest,
@@ -157,5 +156,3 @@ async function warnOnIncompleteCoverage({
     );
   }
 }
-
-registerHandler(Handlers.PREDICTION_TRIGGER, predictionTrigger);

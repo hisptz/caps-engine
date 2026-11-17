@@ -1,5 +1,4 @@
-import { registerHandler, type StepHandler } from "@/services/worker/types/service.ts";
-import { Handlers } from "@/services/worker/constants/handlers.ts";
+import type { StepHandler } from "@/services/worker/types/service.ts";
 import {
   getTaskMapByJobType,
   getTaskNotifications,
@@ -189,8 +188,6 @@ export const dhis2AnalyticsRun: StepHandler = {
     throw timeoutError;
   },
 };
-
-registerHandler(Handlers.DHIS2_ANALYTICS_RUN, dhis2AnalyticsRun);
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

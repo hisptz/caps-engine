@@ -1,6 +1,5 @@
 import path from "node:path";
-import { registerHandler, type StepHandler } from "@/services/worker/types/service.ts";
-import { Handlers } from "@/services/worker/constants/handlers.ts";
+import type { StepHandler } from "@/services/worker/types/service.ts";
 import { env } from "@/shared/utils/env.ts";
 import { getAnalyticsData } from "@/services/worker/utils/dhis2.ts";
 import {
@@ -218,5 +217,3 @@ export const thresholdGeneration: StepHandler = {
     return { filename: outputFilename, count: dataValues.length };
   },
 };
-
-registerHandler(Handlers.THRESHOLD_GENERATION, thresholdGeneration);
