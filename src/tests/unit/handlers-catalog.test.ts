@@ -7,6 +7,7 @@ import {
   listHandlerDescriptors,
   validateHandlerConfig,
 } from "@/shared/handlers/catalog.ts";
+import { CAPS_FIELD_KEY } from "@/shared/handlers/fields.ts";
 import { climateOpenEoConfigSchema } from "@/services/worker/services/handlers/climateOpenEo/schemas/config.ts";
 import { predictionTriggerConfigSchema } from "@/services/worker/services/handlers/predictionTrigger/schemas/config.ts";
 import { thresholdGenerationConfigSchema } from "@/services/worker/services/handlers/thresholdGeneration/schemas/config.ts";
@@ -51,6 +52,27 @@ describe("handler catalog", () => {
     const climateDownload = handlers.find((h) => h.key === "climate-openeo-download");
     expect(climateDownload?.displayName).toBe("Open Climate Service Download");
     expect(climateDownload?.queueName).toBe("step.climate-openeo-download");
+  });
+
+  it("tells the app which DHIS2 picker to draw for hinted fields", () => {
+    const hint = (handlerKey: string, ...path: string[]) => {
+      let node = getHandlerDescriptor(handlerKey)?.schemas?.config as
+        | Record<string, unknown>
+        | undefined;
+      for (const key of path) {
+        node = (node?.properties as Record<string, Record<string, unknown>> | undefined)?.[key];
+      }
+      return node?.[CAPS_FIELD_KEY];
+    };
+
+    expect(hint("dhis2-data-check", "dataElements")).toBe("dataElement");
+    expect(hint("dhis2-data-check", "orgUnit")).toBe("orgUnits");
+    expect(hint("dhis2-data-check", "period")).toBe("period");
+    expect(hint("dhis2-instance-pull", "routeCode")).toBe("connectedInstance");
+    expect(hint("dhis2-instance-push", "routeCode")).toBe("connectedInstance");
+    expect(hint("dhis2-notify", "recipients", "userGroups")).toBe("userGroups");
+    // A hint is only drawing advice: it changes nothing about what is valid
+    expect(hint("dhis2-data-check", "chunkOrgUnits")).toBeUndefined();
   });
 
   it("registers dhis2-instance-pull with a period context override", () => {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { capsField } from "@/shared/handlers/fields.ts";
 
 const DHIS2_UID = /^[a-zA-Z][a-zA-Z0-9]{10}$/;
 const uid = z.string().regex(DHIS2_UID, "Must be a valid DHIS2 UID");
@@ -6,7 +7,7 @@ const uid = z.string().regex(DHIS2_UID, "Must be a valid DHIS2 UID");
 /** DHIS2 users / user groups that receive a DHIS2 message. */
 export const dhis2RecipientsSchema = z.object({
   users: z.array(uid).default([]),
-  userGroups: z.array(uid).default([]),
+  userGroups: capsField(z.array(uid), "userGroups").default([]),
 });
 
 export type Dhis2Recipients = z.infer<typeof dhis2RecipientsSchema>;

@@ -1,9 +1,6 @@
 import amqp from "amqp-connection-manager";
 import type { Channel, ConsumeMessage } from "amqplib";
 import { setupTelemetry } from "@/shared/telemetry/index.ts";
-
-// Import all handlers so the registry is populated before any message is consumed
-import "./services/handlers/index.ts";
 import {
   PIPELINE_QUEUE,
   PipelineCoordinator,
@@ -18,7 +15,8 @@ import { StepWorker } from "@/services/worker/services/workers/step.ts";
 import { env, logger, printBanner } from "@/shared/utils";
 import { setupTopology } from "@/services/worker/services/monitor/topology.ts";
 import { DlxMonitor } from "@/services/worker/services/monitor/monitor.ts";
-import { STEP_QUEUES } from "@/services/worker/constants/handlers.ts";
+import { STEP_QUEUES } from "@/shared/handlers/registry.ts";
+import { loadHandlers } from "@/services/worker/utils/loadHandlers.ts";
 import { OutboxPublisher } from "@/services/worker/services/outbox/publisher.ts";
 import { ConnectorEvaluator } from "@/services/worker/services/runners/connector.ts";
 import { MergeEvaluator } from "@/services/worker/services/runners/merge.ts";
@@ -59,6 +57,9 @@ async function startWorker() {
   const shutdownTelemetry = setupTelemetry();
   await printBanner("CAPS Worker");
   logger.info("Starting CAPS worker...");
+  // Every step's code is loaded before any message is consumed
+  const loadedPlugins = await loadHandlers();
+  logger.info(`[worker] Steps loaded (${loadedPlugins.length}): ${loadedPlugins.join(", ")}`);
   const prisma = createDbClient();
   logger.info("[worker] DB client created");
 
