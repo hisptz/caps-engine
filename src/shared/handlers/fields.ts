@@ -27,6 +27,10 @@ export const CAPS_FIELDS = {
   connectedInstance: "connectedInstance",
   /** DHIS2 user group IDs */
   userGroups: "userGroups",
+  /** Climate periods: daily, weekly or monthly, fixed range or latest N (see `climatePeriodSchema`) */
+  climatePeriod: "climatePeriod",
+  /** The id of an Open Climate Service pipeline; the app can also create and edit it */
+  ocsPipeline: "ocsPipeline",
 } as const;
 
 export type CapsField = (typeof CAPS_FIELDS)[keyof typeof CAPS_FIELDS];

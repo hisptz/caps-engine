@@ -15,12 +15,14 @@ import thresholdGeneration from "./thresholdGeneration/plugin.ts";
 import alertGeneration from "./alertGeneration/plugin.ts";
 import eventDataUpload from "./eventDataUpload/plugin.ts";
 import dhis2Notify from "./dhis2Notify/plugin.ts";
+import ocsPipelineRun from "./ocsPipelineRun/plugin.ts";
 
 export const BUILT_IN_PLUGINS: HandlerPlugin[] = [
   openClimateServiceSync,
   climateOpenEoCreate,
   climateOpenEoPoll,
   climateOpenEoDownload,
+  ocsPipelineRun,
   predictionTrigger,
   predictionPoll,
   predictionDataDownload,

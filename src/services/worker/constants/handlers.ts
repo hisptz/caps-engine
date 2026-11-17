@@ -15,4 +15,5 @@ export enum Handlers {
   EVENT_DATA_UPLOAD = "event-data-upload",
   DHIS2_NOTIFY = "dhis2-notify",
   DHIS2_DATA_CHECK = "dhis2-data-check",
+  OCS_PIPELINE_RUN = "ocs-pipeline-run",
 }

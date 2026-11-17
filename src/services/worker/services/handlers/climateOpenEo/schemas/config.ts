@@ -33,7 +33,8 @@ const lastDaysPeriodSchema = z.strictObject({
   lastDays: z.number().int().min(1),
 });
 
-const periodSchema = z
+/** Climate periods: a fixed range of period ids or the latest N periods (daily, weekly, monthly). */
+export const climatePeriodSchema = z
   .union([fixedPeriodSchema, rollingPeriodSchema, lastDaysPeriodSchema])
   .superRefine((period, ctx) => {
     const count = "lastDays" in period ? period.lastDays : "count" in period ? period.count : null;
@@ -71,7 +72,7 @@ export const climateOpenEoConfigSchema = z
     aggregation: z.object({
       method: z.enum(["mean", "min", "max", "sum"]),
     }),
-    period: periodSchema,
+    period: climatePeriodSchema,
     orgUnit: z
       .object({
         levels: z.array(z.string()).optional(),
@@ -93,7 +94,7 @@ export type ClimateOpenEoConfig = z.infer<typeof climateOpenEoConfigSchema>;
  * including later edits, so a schedule without a period follows a rolling step as it moves.
  */
 export const climateOpenEoContextSchema = z.object({
-  period: periodSchema.optional(),
+  period: climatePeriodSchema.optional(),
   orgUnit: z
     .object({
       levels: z.array(z.string()).optional(),

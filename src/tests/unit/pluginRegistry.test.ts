@@ -47,6 +47,7 @@ describe("plugin registry", () => {
         "step.alert-generation",
         "step.event-data-upload",
         "step.dhis2-notify",
+        "step.ocs-pipeline-run",
       ].sort()
     );
     expect([...PLUGIN_REGISTRY.values()].every((p) => p.builtIn)).toBe(true);
@@ -110,7 +111,7 @@ describe("loadHandlers", () => {
       key: `loaded-${p.key}`,
     }));
     const loaded = await loadHandlers(plugins);
-    expect(loaded).toHaveLength(16);
+    expect(loaded).toHaveLength(17);
   });
 
   it("names the plugin whose code does not load", async () => {
