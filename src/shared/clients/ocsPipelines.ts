@@ -228,6 +228,15 @@ export async function listOcsDatasets(): Promise<Array<Record<string, unknown>>>
   return data.items ?? [];
 }
 
+/**
+ * A dataset's period type (`daily`, `monthly`, ...) as OCS lists it, or null when OCS does not
+ * list the dataset. A pipeline delivers values at this period type: OCS does not resample in time.
+ */
+export async function getOcsDatasetPeriodType(datasetId: string): Promise<string | null> {
+  const item = (await listOcsDatasets()).find((dataset) => dataset.dataset_id === datasetId);
+  return typeof item?.period_type === "string" ? item.period_type.toLowerCase() : null;
+}
+
 // --- workflow parameters, as OCS reads them (open_geo_service/pipelines/workflow.py) ---
 
 const TEMPORAL_INTERVAL = "temporal-interval";
