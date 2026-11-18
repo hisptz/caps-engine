@@ -55,7 +55,12 @@ export function buildRegistry(
       (key) => !extra.some((plugin) => plugin.key === key) && !registry.has(key)
     );
     if (unknown.length > 0) {
-      throw new Error(`CAPS_PLUGINS names plugins that are not listed: ${unknown.join(", ")}`);
+      const listed = extra.map((plugin) => plugin.key);
+      throw new Error(
+        `CAPS_PLUGINS names plugins that are not listed: ${unknown.join(", ")}. ` +
+          `Use plugin keys (the \`key\` in each plugin.ts), not folder names. ` +
+          `Listed plugins: ${listed.length > 0 ? listed.join(", ") : "none"}`
+      );
     }
   }
 

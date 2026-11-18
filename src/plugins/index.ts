@@ -1,4 +1,5 @@
 import type { HandlerPlugin } from "@/shared/handlers/plugin.ts";
+import httpDataPull from "./httpDataPull/plugin.ts";
 
 /**
  * Plugins that are not built in, e.g. a country's own data source. Each lives in its own
@@ -12,4 +13,4 @@ import type { HandlerPlugin } from "@/shared/handlers/plugin.ts";
  * `CAPS_PLUGINS`, e.g. `CAPS_PLUGINS=data-pull` (comma-separated, or `*` for all). Set it once
  * in `.env`: the compose files already pass it to the API, workers and scheduler.
  */
-export const PLUGINS: HandlerPlugin[] = [];
+export const PLUGINS: HandlerPlugin[] = [httpDataPull];
