@@ -23,6 +23,9 @@ type WaitState = {
   statusErrors?: number;
 };
 
+/** How often the run is checked, and how long it may take before the step gives up. */
+const polling = { intervalSeconds: 15, timeoutHours: 6 };
+
 /** Consecutive failed status reads tolerated before the step fails (OCS restarting, say). */
 const MAX_STATUS_ERRORS = 10;
 
@@ -56,7 +59,6 @@ export type OcsPipelineRunOutput = {
 export const ocsPipelineRun: StepHandler = {
   async execute(ctx) {
     const config = ocsPipelineRunConfigSchema.parse(ctx.handlerConfig ?? {});
-    const polling = config.polling ?? { intervalSeconds: 15, timeoutHours: 6 };
     const { pipelineId, mode } = config;
     const state = (ctx.waitState ?? {}) as WaitState;
 

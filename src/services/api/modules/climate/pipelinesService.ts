@@ -39,7 +39,13 @@ export type OcsPipelineOptions = {
     intervalParameters: string[];
   }>;
   datasets: Array<{ id: string; name: string; variable?: string; periodType?: string }>;
-  collections: Array<{ id: string; name: string; featureCount?: number | null }>;
+  collections: Array<{
+    id: string;
+    name: string;
+    featureCount?: number | null;
+    /** As OCS stored them; zonal aggregation takes only Polygon and MultiPolygon. */
+    geometryTypes: string[];
+  }>;
   /** Named DHIS2 connections: OCS_DHIS2_CONNECTIONS plus any an existing pipeline uses. */
   connections: string[];
 };
@@ -147,6 +153,7 @@ export class OcsPipelinesService {
           id: item.id,
           name: item.name || item.id,
           featureCount: item.feature_count,
+          geometryTypes: item.geometry_types ?? [],
         })),
         connections: [...connections].sort(),
       };

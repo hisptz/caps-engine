@@ -200,10 +200,20 @@ export async function listOcsWorkflows(): Promise<OcsWorkflow[]> {
 }
 
 export async function listOcsFeatureCollections(): Promise<
-  Array<{ id: string; name?: string | null; feature_count?: number | null }>
+  Array<{
+    id: string;
+    name?: string | null;
+    feature_count?: number | null;
+    geometry_types?: string[] | null;
+  }>
 > {
   const { data } = await climateApiClient.get<{
-    items?: Array<{ id: string; name?: string | null; feature_count?: number | null }>;
+    items?: Array<{
+      id: string;
+      name?: string | null;
+      feature_count?: number | null;
+      geometry_types?: string[] | null;
+    }>;
   }>("/features", { headers: JSON_HEADERS });
   return data.items ?? [];
 }
