@@ -1,3 +1,9 @@
+# [3.4.0](https://github.com/hisptz/caps-engine/compare/v3.3.2...v3.4.0) (2026-11-19)
+
+### Features
+
+- add support for plugin architecture & open climate service pipeline support ([#21](https://github.com/hisptz/caps-engine/issues/21)) ([a3e7e62](https://github.com/hisptz/caps-engine/commit/a3e7e62271bf27472d58a5c19c34c00054619a40))
+
 ## [3.3.2](https://github.com/hisptz/caps-engine/compare/v3.3.1...v3.3.2) (2026-11-16)
 
 ### Bug Fixes
