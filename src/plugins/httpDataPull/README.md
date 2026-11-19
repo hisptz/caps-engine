@@ -58,6 +58,10 @@ The plugin is listed with one line in `src/plugins/index.ts`.
   (or `orgUnits`, `period`, `connectedInstance`, `userGroups`) shows the DHIS2 picker. Reuse
   `pullPeriodSchema` and `orgUnitConfigSchema` for periods and org units.
 - **Another response shape**: change `toDataValues()` in `index.ts`; the rest stays.
+- **Sending to another DHIS2 instance** instead of staging: call
+  `sendDataValues(ctx, { routeCode, dataValues })` (`src/services/worker/utils/sendDataValues.ts`).
+  It posts in chunks through the instance's route, adds up DHIS2's import counts, fails on a
+  rejected import and logs conflicts, so a step can pull, prepare and send without staging.
 - **Errors**: throw an `Error` for something that may pass on a retry (network, timeouts).
   Throw `StepPermanentError` when retrying cannot help (bad settings, no data).
 - **Result**: what `execute()` returns is stored on the step run and passed to the next step.
