@@ -1,6 +1,5 @@
 import { chunk } from "lodash-es";
-import { registerHandler, type StepHandler } from "@/services/worker/types/service.ts";
-import { Handlers } from "@/services/worker/constants/handlers.ts";
+import type { StepHandler } from "@/services/worker/types/service.ts";
 import { dhis2RestClient } from "@/shared/clients/dhis.ts";
 import { resolveOrgUnitsWithTask } from "@/services/worker/utils/orgUnitSelection.ts";
 import { resolvePullPeriods } from "@/services/worker/services/handlers/dhis2InstancePull/utils/periods.ts";
@@ -113,5 +112,3 @@ export const dhis2DataCheck: StepHandler = {
     return result;
   },
 };
-
-registerHandler(Handlers.DHIS2_DATA_CHECK, dhis2DataCheck);

@@ -1,6 +1,5 @@
 import path from "node:path";
-import { registerHandler, type StepHandler } from "@/services/worker/types/service.ts";
-import { Handlers } from "@/services/worker/constants/handlers.ts";
+import type { StepHandler } from "@/services/worker/types/service.ts";
 import { env } from "@/shared/utils/env.ts";
 import { getAnalyticsData } from "@/services/worker/utils/dhis2.ts";
 import { periodToOccurredAt } from "@/services/worker/utils/periods.ts";
@@ -187,5 +186,3 @@ export const alertGeneration: StepHandler = {
     return { filename: outputFilename, count: events.length };
   },
 };
-
-registerHandler(Handlers.ALERT_GENERATION, alertGeneration);

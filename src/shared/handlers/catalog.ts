@@ -1,10 +1,7 @@
-import {
-  HANDLERS,
-  type HandlerOutputs,
-  type Handlers,
-} from "@/services/worker/constants/handlers.ts";
 import type { ZodType } from "zod";
 import { z } from "zod";
+import type { HandlerOutputs } from "@/shared/handlers/plugin.ts";
+import { getPlugin, PLUGIN_REGISTRY } from "@/shared/handlers/registry.ts";
 
 /** JSON Schema object returned on GET /handlers (draft-2020-12). */
 export type HandlerJsonSchema = Record<string, unknown>;
@@ -30,18 +27,16 @@ function zodToJsonSchema(schema: ZodType): HandlerJsonSchema {
 }
 
 function getRegistryConfigSchema(key: string): ZodType | undefined {
-  const entry = HANDLERS.get(key as Handlers);
-  return entry?.schemas.config;
+  return getPlugin(key)?.schemas.config;
 }
 
 function getRegistryContextSchema(key: string): ZodType | undefined {
-  const entry = HANDLERS.get(key as Handlers);
-  return entry?.schemas.context;
+  return getPlugin(key)?.schemas.context;
 }
 
 /** Context keys that replace the handler config value whole rather than merging into it. */
 export function getHandlerContextReplaceKeys(handlerKey: string): string[] {
-  return HANDLERS.get(handlerKey as Handlers)?.contextReplaces ?? [];
+  return getPlugin(handlerKey)?.contextReplaces ?? [];
 }
 
 export function hasHandlerContextSchema(handlerKey: string): boolean {
@@ -50,7 +45,7 @@ export function hasHandlerContextSchema(handlerKey: string): boolean {
 
 export function listHandlerDescriptors(): HandlerDescriptor[] {
   const descriptors: HandlerDescriptor[] = [];
-  for (const [key, entry] of HANDLERS) {
+  for (const [key, entry] of PLUGIN_REGISTRY) {
     const schemas: HandlerDescriptor["schemas"] = {};
     if (entry.schemas.config) {
       schemas.config = zodToJsonSchema(entry.schemas.config);
@@ -75,13 +70,12 @@ export function getHandlerDescriptor(key: string): HandlerDescriptor | undefined
   return listHandlerDescriptors().find((d) => d.key === key);
 }
 
-export function isKnownHandlerKey(key: string): key is Handlers {
-  return HANDLERS.has(key as Handlers);
+export function isKnownHandlerKey(key: string): boolean {
+  return PLUGIN_REGISTRY.has(key);
 }
 
 export function getHandlerQueueName(key: string): string | undefined {
-  const entry = HANDLERS.get(key as Handlers);
-  return entry?.queueName;
+  return getPlugin(key)?.queueName;
 }
 
 /** Resolves the RabbitMQ queue for a pipeline step from its handler key. */

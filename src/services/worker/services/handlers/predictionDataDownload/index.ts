@@ -1,10 +1,5 @@
 import path from "node:path";
-import {
-  registerHandler,
-  type StepContext,
-  type StepHandler,
-} from "@/services/worker/types/service.ts";
-import { Handlers } from "@/services/worker/constants/handlers.ts";
+import { type StepContext, type StepHandler } from "@/services/worker/types/service.ts";
 import { env } from "@/shared/utils/env.ts";
 import type { DataValue, DataValueSet } from "@/services/worker/types/data.ts";
 import { getPredictionResult, getPredictionSetup } from "@/services/worker/utils/chap.ts";
@@ -195,5 +190,3 @@ function normaliseQuantileKeys(mapping: Record<string, string>): {
 
   return { byQuantile, skipped };
 }
-
-registerHandler(Handlers.PREDICTION_DATA_DOWNLOAD, predictionDataDownload);

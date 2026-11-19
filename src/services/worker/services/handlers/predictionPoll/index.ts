@@ -1,10 +1,8 @@
 import {
-  registerHandler,
   StepPermanentError,
   StepWaitingError,
   type StepHandler,
 } from "@/services/worker/types/service.ts";
-import { Handlers } from "@/services/worker/constants/handlers.ts";
 import { getJobDescription, getJobLogTail, getJobStatus } from "@/services/worker/utils/chap.ts";
 import { predictionPollConfigSchema } from "./schemas/config.ts";
 
@@ -159,5 +157,3 @@ export const predictionPoll: StepHandler = {
     });
   },
 };
-
-registerHandler(Handlers.PREDICTION_POLL, predictionPoll);

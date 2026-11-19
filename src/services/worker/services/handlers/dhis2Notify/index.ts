@@ -1,9 +1,4 @@
-import {
-  registerHandler,
-  type StepContext,
-  type StepHandler,
-} from "@/services/worker/types/service.ts";
-import { Handlers } from "@/services/worker/constants/handlers.ts";
+import { type StepContext, type StepHandler } from "@/services/worker/types/service.ts";
 import { sendMessageConversation } from "@/services/worker/utils/dhis2.ts";
 import {
   formatNotificationDate,
@@ -78,8 +73,6 @@ export const dhis2Notify: StepHandler = {
     return ctx.input;
   },
 };
-
-registerHandler(Handlers.DHIS2_NOTIFY, dhis2Notify);
 
 function buildTemplateVariables(
   ctx: StepContext,

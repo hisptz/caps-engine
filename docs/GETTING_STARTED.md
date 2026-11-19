@@ -98,7 +98,6 @@ CI (`.github/workflows/ci.yml`) on `main` and PRs to `main`: `bun run lint`, `fo
 | `OUTPUTS_DIR`                       | Worker output directory. Default `./outputs`. Compose sets `/tmp/caps-outputs` on workers.                        |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`       | OTLP endpoint; empty string disables / default.                                                                   |
 | `CLIMATE_API_BASE_URL`              | Climate/openEO-style HTTP API. Schema default `http://localhost:8001`.                                            |
-| `CLIMATE_DATA_BASE_URL`             | Climate data service. Schema default `http://localhost:8081`.                                                     |
 
 `.env.example` lists these plus Compose/Makefile names (`POSTGRES_*`, `RABBITMQ_USER`/`PASSWORD`, `API_PORT`, `DATABASE_URL_TEST`, `NODE_ENV`).
 
@@ -114,7 +113,7 @@ CI (`.github/workflows/ci.yml`) on `main` and PRs to `main`: `bun run lint`, `fo
 | `CHAP_NETWORK` / `CHAP_DATABASE_URL` / `CHAP_RABBITMQ_URL` | `docker-compose.chap.yml` overlay.                        |
 | `NODE_ENV`                                                 | Present in `.env.example`; not in `env.ts`.               |
 
-`docker-compose.yml` passes `CLIMATE_API_BASE_URL` and `CLIMATE_DATA_BASE_URL` into api, workers, and scheduler. Inside containers, `localhost` in those URLs is the container itself — point them at a reachable climate service hostname on the Compose network.
+`docker-compose.yml` passes `CLIMATE_API_BASE_URL` into api, workers, and scheduler. Inside containers, `localhost` in that URL is the container itself — point it at a reachable climate service hostname on the Compose network.
 
 ## Project structure
 

@@ -85,16 +85,14 @@ export async function setupTopology(channel: Channel): Promise<void> {
   // step.* queues — with DLX, no TTL
   // Long-running steps (predictions, heavy syncs) need no TTL
   // The coordinator's AWAITING_STEP status surfaces stuck pipelines
-  for (const step of QUEUES.STEP.values()) {
-    await channel.assertQueue(step.queueName, {
+  for (const queueName of QUEUES.STEP) {
+    await channel.assertQueue(queueName, {
       durable: true,
       arguments: {
         "x-dead-letter-exchange": EXCHANGES.DLX,
       },
     });
-    logger.info(
-      `[topology] Queue declared: ${step.queueName} (durable=true, dlx=${EXCHANGES.DLX})`
-    );
+    logger.info(`[topology] Queue declared: ${queueName} (durable=true, dlx=${EXCHANGES.DLX})`);
   }
 
   logger.info("[topology] All exchanges and queues declared");

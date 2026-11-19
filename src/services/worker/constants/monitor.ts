@@ -1,4 +1,4 @@
-import { HANDLERS } from "@/services/worker/constants/handlers.ts";
+import { STEP_QUEUES } from "@/shared/handlers/registry.ts";
 
 export const EXCHANGES = {
   DLX: "caps.dlx",
@@ -9,5 +9,5 @@ export const QUEUES = {
   STEP_RESULTS: "pipeline.step-results",
   PIPELINE_CONNECTORS: "pipeline.connectors",
   DEAD_LETTERS: "caps.dead-letters",
-  STEP: HANDLERS,
+  STEP: STEP_QUEUES,
 } as const;

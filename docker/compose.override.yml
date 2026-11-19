@@ -66,7 +66,7 @@ services:
     volumes:
       - ./.climate-data/climate-service.yaml:/app/climate-service.yaml
       - ./.climate-data/.ecmwfdatastoresrc:/home/ocs/.ecmwfdatastoresrc
-      - climate_data/data:/app/data
+      - ./.climate-data/data:/app/data
     networks:
       - caps
       # ============================================================
@@ -83,6 +83,9 @@ services:
       CHAP_BASE_URL: ${CHAP_BASE_URL}
       CHAP_API_TOKEN: ${CHAP_API_TOKEN:-}
       CLIMATE_API_BASE_URL: ${CLIMATE_API_BASE_URL}
+      OCS_DHIS2_CONNECTIONS: ${OCS_DHIS2_CONNECTIONS:-}
+      # Plugins under src/plugins to switch on (keys, comma-separated, or *); same on every service
+      CAPS_PLUGINS: ${CAPS_PLUGINS:-}
       OUTPUTS_DIR: /tmp/caps-outputs
     depends_on:
       caps_postgres:
@@ -109,6 +112,8 @@ services:
       CHAP_BASE_URL: ${CHAP_BASE_URL}
       CHAP_API_TOKEN: ${CHAP_API_TOKEN:-}
       CLIMATE_API_BASE_URL: ${CLIMATE_API_BASE_URL}
+      OCS_DHIS2_CONNECTIONS: ${OCS_DHIS2_CONNECTIONS:-}
+      CAPS_PLUGINS: ${CAPS_PLUGINS:-}
     depends_on:
       caps_postgres:
         condition: service_healthy
@@ -129,6 +134,8 @@ services:
       CHAP_BASE_URL: ${CHAP_BASE_URL}
       CHAP_API_TOKEN: ${CHAP_API_TOKEN:-}
       CLIMATE_API_BASE_URL: ${CLIMATE_API_BASE_URL}
+      OCS_DHIS2_CONNECTIONS: ${OCS_DHIS2_CONNECTIONS:-}
+      CAPS_PLUGINS: ${CAPS_PLUGINS:-}
     ports:
       - "${API_PORT:-4000}:4000"
     depends_on:

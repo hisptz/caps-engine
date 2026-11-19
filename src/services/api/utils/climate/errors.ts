@@ -43,6 +43,13 @@ export function mapClimateAxiosError(err: unknown, notFoundDetails?: unknown): A
       err.response.data
     );
   }
+  const status = err.response?.status;
+  if (status === 400 || status === 403 || status === 409) {
+    const data = err.response?.data as { detail?: unknown } | undefined;
+    const message =
+      typeof data?.detail === "string" ? data.detail : "The climate API refused the request.";
+    return apiError(status, ApiErrorCode.CLIMATE_REQUEST_REFUSED, message, data);
+  }
   return climateApiUnavailableError();
 }
 

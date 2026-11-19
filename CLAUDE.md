@@ -123,7 +123,7 @@ A `PipelineConnector` joins two pipelines: when the source execution finishes (`
 
 1. **Every** COMPLETED/FAILED transition goes through `finishExecution()` (`src/shared/pipeline/finishExecution.ts`). In the same transaction it creates one `ConnectorRun` per matching active connector (unique per connector and source execution) and queues `pipeline.connectors` through the outbox, delayed by `delayMinutes`. Writing the status directly skips the connectors.
 2. `ConnectorEvaluator` (`services/runners/connector.ts`) consumes `pipeline.connectors`. It evaluates the connector's `condition` — a closed JSONLogic subset (`src/shared/pipeline/rules.ts`) over `{ context, status }` of the source execution — and, when met, starts the target via `startExecution()` (`src/shared/pipeline/startExecution.ts`, which `TriggerService` also uses) in the same transaction that marks the run FIRED. If the rule is not met and the connector has an `otherwisePipelineId`, that pipeline is started instead (run FIRED with `startedOtherwise: true`); otherwise the run ends NOT*MET. An otherwise pipeline requires a condition and must differ from the target. The target's concurrency policy still applies (a refusal ends the run SKIPPED). `inputMapping` copies source context paths into the target's context.
-   Rules reference step results by step id (`context.stepOutputs.<stepId>.<field>`, written by `withStepOutput()` in `src/shared/pipeline/stepOutputs.ts` alongside the positional `step*<n>\_output`), so reordering steps does not change what a rule checks. Each handler declares its result fields in `HANDLERS` (`outputs`), which `GET /handlers`returns for the app's condition picker; keep them in step with what`execute` returns.
+   Rules reference step results by step id (`context.stepOutputs.<stepId>.<field>`, written by `withStepOutput()` in `src/shared/pipeline/stepOutputs.ts` alongside the positional `step*<n>\_output`), so reordering steps does not change what a rule checks. Each handler declares its result fields in its plugin (`outputs`), which `GET /handlers`returns for the app's condition picker; keep them in step with what`execute` returns.
 3. Guardrails: the API rejects connectors that would close a loop; executions carry `chainDepth` and connectors stop at `MAX_CONNECTOR_CHAIN_DEPTH`; a pipeline that other pipelines' connectors start cannot be deleted.
 
 ### Workflows
@@ -146,7 +146,7 @@ Mappings belong to a connected instance (a `caps-src-` route on staging), not to
 
 ### Handler System
 
-Step logic is implemented as plugins. Handlers are registered by key in the `HANDLERS` map (`Handlers` enum → `HandlerRegistryEntry`) at `src/services/worker/constants/handlers.ts`, and re-exported from `src/services/worker/services/handlers/index.ts`. Each handler directory under `services/handlers/` implements:
+Each kind of step is a plugin (`HandlerPlugin`, `src/shared/handlers/plugin.ts`): a folder with a `plugin.ts` (`definePlugin({ key, displayName, description, tags, outputs, schemas, contextReplaces?, load })`) and an `index.ts` with the `StepHandler`. The API reads only the definitions; `load()` (a lazy `import("./index.ts")`) is called by the worker alone, at startup (`loadHandlers()`, `src/services/worker/utils/loadHandlers.ts`). Built-in plugins sit under `services/handlers/` and are listed in `services/handlers/plugins.ts`; other plugins sit under `src/plugins/` and are listed in `src/plugins/index.ts`, and a deployment switches them on with `CAPS_PLUGINS` in its `.env` (comma-separated keys or `*`; the compose files pass it to every service). `src/shared/handlers/registry.ts` builds the registry from both lists (checks keys and queues, queue `step.<key>` by default) and gives `STEP_QUEUES`. The `Handlers` enum (`src/services/worker/constants/handlers.ts`) only names the built-in keys for code that treats a step in its own way. Config fields marked with `capsField()` (`src/shared/handlers/fields.ts`: `dataElement`, `orgUnits`, `period`, `connectedInstance`, `userGroups`) get the matching DHIS2 picker in the app's generic config form, which the app draws from `schemas.config` for any handler without a hand-built form. A handler implements:
 
 ```typescript
 interface StepHandler {
@@ -169,7 +169,8 @@ Current handlers (see `Handlers` enum): climate dataset freshness (`open-climate
 | `src/services/worker/services/runners/step.ts`      | `StepRunner` — inline step execution                                      |
 | `src/services/worker/services/workers/step.ts`      | `StepWorker` — queued step execution                                      |
 | `src/services/worker/services/outbox/publisher.ts`  | `OutboxPublisher` — transactional outbox delivery                         |
-| `src/services/worker/constants/handlers.ts`         | `Handlers` enum and `HANDLERS` registry                                   |
+| `src/shared/handlers/registry.ts`                   | Plugin registry: built-in and `src/plugins/` steps, `STEP_QUEUES`         |
+| `src/shared/handlers/plugin.ts`                     | `HandlerPlugin` / `definePlugin`: what a step plugin declares             |
 | `src/services/worker/types/service.ts`              | `StepHandler`/`StepContext` types                                         |
 | `src/services/worker/services/monitor/topology.ts`  | RabbitMQ queue/exchange declarations (single source of truth)             |
 | `src/services/worker/services/monitor/monitor.ts`   | Dead-letter queue monitor                                                 |
@@ -221,6 +222,7 @@ Key variables (see `.env.example`):
 | `CHAP_NETWORK`      | Docker network CHAP is on (only for `docker-compose.chap.yml`) | —                  |
 | `CHAP_DATABASE_URL` | Postgres URL pointing at CHAP's shared postgres instance       | —                  |
 | `CHAP_RABBITMQ_URL` | RabbitMQ URL pointing at CHAP's shared RabbitMQ instance       | —                  |
+| `CAPS_PLUGINS`      | Non-built-in plugins to switch on (keys, comma-separated, `*`) | none               |
 
 Use `docker-compose.yml` (via `make up`) to run PostgreSQL and RabbitMQ locally, or `make up-chap` to connect to CHAP's existing instances.
 

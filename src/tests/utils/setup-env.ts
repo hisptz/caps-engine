@@ -45,3 +45,7 @@ if (!process.env["DHIS2_PAT"]) {
 if (!process.env["DHIS2_BASE_URL"]) {
   process.env["DHIS2_BASE_URL"] = "http://localhost:8080";
 }
+
+// CAPS_PLUGINS — tests run with built-in steps only, whatever a developer's .env switches on.
+// A test that needs a plugin switches it on itself, through buildRegistry().
+process.env["CAPS_PLUGINS"] = "";

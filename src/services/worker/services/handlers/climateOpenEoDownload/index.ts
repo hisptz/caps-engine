@@ -1,6 +1,5 @@
 import path from "node:path";
-import { registerHandler, type StepHandler } from "@/services/worker/types/service.ts";
-import { Handlers } from "@/services/worker/constants/handlers.ts";
+import type { StepHandler } from "@/services/worker/types/service.ts";
 import { env } from "@/shared/utils";
 import { uniqueDataValueSetFilename } from "@/services/worker/utils/dataValueSetFile.ts";
 import { dataValueSetSchema } from "@/services/worker/schemas/dataValueSet.ts";
@@ -81,5 +80,3 @@ export const climateOpenEoDownload: StepHandler = {
     return { jobId, filename: outputFilename, count: dataValueSet.dataValues.length };
   },
 };
-
-registerHandler(Handlers.CLIMATE_OPENEO_DOWNLOAD, climateOpenEoDownload);

@@ -10,9 +10,18 @@ import {
   syncPlanQuerySchema,
   createIngestionSchema,
   syncDatasetSchema,
+  ocsPipelineIdParams,
+  ocsPipelineModeParams,
+  ocsPipelineCreateSchema,
+  ocsPipelineChangeSchema,
+  ocsPipelineIntervalSchema,
 } from "@/services/api/modules/climate/model.ts";
+import { OcsPipelinesService } from "@/services/api/modules/climate/pipelinesService.ts";
 
 const climateService = new ClimateService();
+const ocsPipelines = new OcsPipelinesService();
+
+const OCS_UNAVAILABLE = { "502": { description: "Climate API service unavailable" } };
 
 export const climateModule = new Elysia({ prefix: "/climate", tags: ["climate"] })
   .get("/collections", () => climateService.listCollections(), {
@@ -185,4 +194,92 @@ export const climateModule = new Elysia({ prefix: "/climate", tags: ["climate"] 
         },
       },
     }
-  );
+  )
+  // --- OCS pipelines: CAPS creates and edits them; the ocs-pipeline-run step runs them ---
+  .get("/pipelines", () => ocsPipelines.list(), {
+    detail: {
+      summary: "List OCS pipelines",
+      description: "Pipelines defined in Open Climate Service (workflow, inputs, DHIS2 mapping).",
+      operationId: "listOcsPipelines",
+      responses: { "200": { description: "`{ items: [...] }`" }, ...OCS_UNAVAILABLE },
+    },
+  })
+  .get("/pipelines/options", () => ocsPipelines.options(), {
+    detail: {
+      summary: "OCS pipeline setup options",
+      description:
+        "Pipeline-ready workflows with the parameters a pipeline binds, datasets, feature collections and named DHIS2 connections.",
+      operationId: "getOcsPipelineOptions",
+      responses: { "200": { description: "Options" }, ...OCS_UNAVAILABLE },
+    },
+  })
+  .get("/pipelines/:id", ({ params }) => ocsPipelines.get(params.id), {
+    params: ocsPipelineIdParams,
+    detail: {
+      summary: "Get OCS pipeline",
+      operationId: "getOcsPipeline",
+      responses: {
+        "200": { description: "The pipeline, resolved, with its latest run" },
+        "404": { description: "Not found" },
+        ...OCS_UNAVAILABLE,
+      },
+    },
+  })
+  .post("/pipelines", ({ body }) => ocsPipelines.create(body), {
+    body: ocsPipelineCreateSchema,
+    detail: {
+      summary: "Create OCS pipeline",
+      description:
+        "Saved with delivery policy `manual` (CAPS starts its runs). OCS validates it first and refuses a failing one with 422 and its checks.",
+      operationId: "createOcsPipeline",
+      responses: {
+        "200": { description: "Created" },
+        "409": { description: "The id is taken" },
+        "422": { description: "Validation failed; checks under details" },
+        ...OCS_UNAVAILABLE,
+      },
+    },
+  })
+  .put("/pipelines/:id", ({ params, body }) => ocsPipelines.update(params.id, body), {
+    params: ocsPipelineIdParams,
+    body: ocsPipelineChangeSchema,
+    detail: {
+      summary: "Update OCS pipeline",
+      description:
+        "Replace the definition. `revision` is the one read; a stale one is refused with 409.",
+      operationId: "updateOcsPipeline",
+      responses: {
+        "200": { description: "Saved" },
+        "409": { description: "Changed in OCS since it was read" },
+        "422": { description: "Validation failed" },
+        ...OCS_UNAVAILABLE,
+      },
+    },
+  })
+  .post("/pipelines/:id/dry-run", ({ params, body }) => ocsPipelines.dryRun(params.id, body), {
+    params: ocsPipelineIdParams,
+    body: ocsPipelineIntervalSchema,
+    detail: {
+      summary: "Dry-run OCS pipeline",
+      description:
+        "Render one interval and have DHIS2 judge it without writing. Going live needs a passed dry run.",
+      operationId: "dryRunOcsPipeline",
+      responses: {
+        "200": { description: "The dry run: values rendered and DHIS2's verdict" },
+        ...OCS_UNAVAILABLE,
+      },
+    },
+  })
+  .post("/pipelines/:id/mode/:mode", ({ params }) => ocsPipelines.setMode(params.id, params.mode), {
+    params: ocsPipelineModeParams,
+    detail: {
+      summary: "Set OCS pipeline delivery mode",
+      description: "dry_run, live (needs a passed dry run of the current bindings) or paused.",
+      operationId: "setOcsPipelineMode",
+      responses: {
+        "200": { description: "The pipeline" },
+        "409": { description: "Cannot go live yet" },
+        ...OCS_UNAVAILABLE,
+      },
+    },
+  });

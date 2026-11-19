@@ -1,9 +1,4 @@
-import {
-  registerHandler,
-  StepSkippedError,
-  type StepHandler,
-} from "@/services/worker/types/service.ts";
-import { Handlers } from "@/services/worker/constants/handlers.ts";
+import { StepSkippedError, type StepHandler } from "@/services/worker/types/service.ts";
 import { env } from "@/shared/utils/env.ts";
 import path from "node:path";
 import type { DataValueSet, ImportSummary } from "@/services/worker/types/data.ts";
@@ -132,5 +127,3 @@ export const dhis2DataUpload: StepHandler = {
     return result;
   },
 };
-
-registerHandler(Handlers.DHIS2_DATA_UPLOAD, dhis2DataUpload);

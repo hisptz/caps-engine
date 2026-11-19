@@ -2,16 +2,14 @@ import { chunk } from "lodash-es";
 import { z } from "zod";
 import type { AxiosInstance } from "axios";
 import {
-  registerHandler,
   StepSkippedError,
   type StepContext,
   type StepHandler,
 } from "@/services/worker/types/service.ts";
-import { Handlers } from "@/services/worker/constants/handlers.ts";
 import { createRouteClient, describeRouteError, dhis2RestClient } from "@/shared/clients/dhis.ts";
-import { groupConflicts, StepError } from "@/shared/utils/error.ts";
-import type { DataValue, ImportSummary } from "@/services/worker/types/data.ts";
-import { postDataValueSet } from "@/services/worker/utils/dhis2.ts";
+import { StepError } from "@/shared/utils/error.ts";
+import type { DataValue } from "@/services/worker/types/data.ts";
+import { sendDataValues } from "@/services/worker/utils/sendDataValues.ts";
 import { periodToOccurredAt } from "@/services/worker/utils/periods.ts";
 import { resolveOrgUnitsWithTask } from "@/services/worker/utils/orgUnitSelection.ts";
 import { toComboMeta } from "@/services/worker/services/handlers/dhis2InstancePull/utils/categoryCombos.ts";
@@ -470,65 +468,13 @@ export const dhis2InstancePush: StepHandler = {
       });
     }
 
-    const batches = chunk(dataValues, config.chunk.values);
-    const totals = { imported: 0, updated: 0, ignored: 0, deleted: 0 };
-    const conflicts: NonNullable<ImportSummary["conflicts"]> = [];
-    let status = "SUCCESS";
-    for (const [index, batch] of batches.entries()) {
-      const label = `${index + 1}/${batches.length}`;
-      const task = await ctx.tasks.startTask("push-chunk", {
-        chunk: label,
-        values: batch.length,
-      });
-      let summary: ImportSummary;
-      try {
-        summary = await postDataValueSet({
-          payload: { dataValues: batch },
-          ctx,
-          importStrategy,
-          client: target,
-        });
-      } catch (err) {
-        const error = new StepError("Target instance push request failed", {
-          source: "dhis2-route",
-          routeCode,
-          chunk: label,
-          description: describeRouteError(err, routeCode),
-        });
-        await task.fail(error);
-        throw error;
-      }
-      const chunkConflicts = summary.conflicts ?? [];
-      conflicts.push(...chunkConflicts);
-      if (summary.status === "ERROR") {
-        const error = new StepError("The target instance rejected the data value import", {
-          source: "dhis2-target",
-          routeCode,
-          chunk: label,
-          chunksStored: index,
-          description: summary.description,
-          totalConflicts: chunkConflicts.length,
-          conflicts: groupConflicts(chunkConflicts),
-        });
-        await task.fail(error);
-        throw error;
-      }
-      if (summary.status !== "SUCCESS") status = summary.status;
-      const counts = summary.importCount ?? { imported: 0, updated: 0, ignored: 0, deleted: 0 };
-      totals.imported += counts.imported;
-      totals.updated += counts.updated;
-      totals.ignored += counts.ignored;
-      totals.deleted += counts.deleted;
-      await task.succeed({ status: summary.status, ...counts, conflicts: chunkConflicts.length });
-    }
-
-    if (conflicts.length > 0) {
-      await ctx.log("WARN", "The target instance imported the values with conflicts", {
-        status,
-        totalConflicts: conflicts.length,
-        conflicts: groupConflicts(conflicts),
-      });
-    }
+    const { status, conflicts, ...totals } = await sendDataValues(ctx, {
+      routeCode,
+      dataValues,
+      importStrategy,
+      chunkSize: config.chunk.values,
+      taskName: "push-chunk",
+    });
 
     const result: Dhis2InstancePushOutput = {
       routeCode,
@@ -536,11 +482,14 @@ export const dhis2InstancePush: StepHandler = {
       status,
       read: values.length,
       sent: dataValues.length,
-      ...totals,
+      imported: totals.imported,
+      updated: totals.updated,
+      ignored: totals.ignored,
+      deleted: totals.deleted,
       unmatchedCombos,
       skippedOrgUnits,
       closedValues,
-      conflicts: conflicts.length,
+      conflicts,
       targetVersion,
     };
     await ctx.log("INFO", "Push complete", {
@@ -550,5 +499,3 @@ export const dhis2InstancePush: StepHandler = {
     return result;
   },
 };
-
-registerHandler(Handlers.DHIS2_INSTANCE_PUSH, dhis2InstancePush);

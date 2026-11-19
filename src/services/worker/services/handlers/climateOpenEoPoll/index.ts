@@ -1,5 +1,4 @@
-import { registerHandler, type StepHandler } from "@/services/worker/types/service.ts";
-import { Handlers } from "@/services/worker/constants/handlers.ts";
+import type { StepHandler } from "@/services/worker/types/service.ts";
 import {
   getOpenEoJob,
   SUCCESS_OPENEO_JOB_STATUS,
@@ -95,8 +94,6 @@ export const climateOpenEoPoll: StepHandler = {
     throw timeoutError;
   },
 };
-
-registerHandler(Handlers.CLIMATE_OPENEO_POLL, climateOpenEoPoll);
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

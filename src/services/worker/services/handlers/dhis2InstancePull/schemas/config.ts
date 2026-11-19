@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { orgUnitConfigSchema } from "@/services/worker/schemas/orgUnit.ts";
 import { SOURCE_ROUTE_CODE_PATTERN } from "@/shared/constants/sourceRoutes.ts";
+import { capsField } from "@/shared/handlers/fields.ts";
 
 const uidSchema = z.string().regex(/^[A-Za-z][A-Za-z0-9]{10}$/, {
   message: "Must be a DHIS2 ID (11 letters and digits, starting with a letter)",
@@ -47,10 +48,10 @@ export const relativePullPeriodSchema = z.object({
   offset: z.number().int().min(0).default(1),
 });
 
-export const pullPeriodSchema = z.discriminatedUnion("mode", [
-  fixedPullPeriodSchema,
-  relativePullPeriodSchema,
-]);
+export const pullPeriodSchema = capsField(
+  z.discriminatedUnion("mode", [fixedPullPeriodSchema, relativePullPeriodSchema]),
+  "period"
+);
 
 export type PullPeriod = z.infer<typeof pullPeriodSchema>;
 
@@ -101,9 +102,12 @@ const pullItemsSchema = z
   });
 
 const pullConfigFields = {
-  routeCode: z.string().regex(SOURCE_ROUTE_CODE_PATTERN, {
-    message: "Pick a connected instance (route code starting with caps-src-)",
-  }),
+  routeCode: capsField(
+    z.string().regex(SOURCE_ROUTE_CODE_PATTERN, {
+      message: "Pick a connected instance (route code starting with caps-src-)",
+    }),
+    "connectedInstance"
+  ),
   items: pullItemsSchema.optional(),
   /** Staging data elements to pull, as the instance's mappings say where each comes from. */
   mapped: z

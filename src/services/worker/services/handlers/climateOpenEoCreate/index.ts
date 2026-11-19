@@ -1,5 +1,4 @@
-import { registerHandler, type StepHandler } from "@/services/worker/types/service.ts";
-import { Handlers } from "@/services/worker/constants/handlers.ts";
+import type { StepHandler } from "@/services/worker/types/service.ts";
 import { climateOpenEoConfigSchema } from "../climateOpenEo/schemas/config.ts";
 import { getOrgUnitsGeoJSON } from "@/services/worker/utils/orgUnitsGeoJSON.ts";
 import { createOpenEoJob, startOpenEoJob } from "@/shared/clients/openeo.ts";
@@ -116,5 +115,3 @@ export const climateOpenEoCreate: StepHandler = {
     return { jobId, temporalExtent };
   },
 };
-
-registerHandler(Handlers.CLIMATE_OPENEO_CREATE, climateOpenEoCreate);

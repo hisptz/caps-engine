@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SOURCE_ROUTE_CODE_PATTERN } from "@/shared/constants/sourceRoutes.ts";
+import { capsField } from "@/shared/handlers/fields.ts";
 import { orgUnitConfigSchema } from "@/services/worker/schemas/orgUnit.ts";
 import { dataValueImportStrategySchema } from "@/services/worker/services/handlers/dhis2DataUpload/schemas/config.ts";
 import {
@@ -81,9 +82,12 @@ const pushItemsSchema = z
   });
 
 const pushConfigFields = {
-  routeCode: z.string().regex(SOURCE_ROUTE_CODE_PATTERN, {
-    message: "Pick a connected instance (route code starting with caps-src-)",
-  }),
+  routeCode: capsField(
+    z.string().regex(SOURCE_ROUTE_CODE_PATTERN, {
+      message: "Pick a connected instance (route code starting with caps-src-)",
+    }),
+    "connectedInstance"
+  ),
   items: pushItemsSchema.optional(),
   /** Staging data elements to push, as the instance's mappings say where each goes. */
   mapped: z

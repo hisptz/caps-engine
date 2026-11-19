@@ -1,10 +1,8 @@
 import {
-  registerHandler,
   type StepContext,
   type StepHandler,
   type TaskHandle,
 } from "@/services/worker/types/service.ts";
-import { Handlers } from "@/services/worker/constants/handlers.ts";
 import {
   getClimateJob,
   planClimateDatasetSync,
@@ -227,8 +225,6 @@ async function waitForJob(
       `It keeps running in the Open Climate Service; retry this step once it has finished.`
   );
 }
-
-registerHandler(Handlers.OPEN_CLIMATE_SERVICE_SYNC, openClimateServiceSync);
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

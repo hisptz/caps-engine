@@ -28,7 +28,7 @@ import type {
 const ALLOWED_DEAD_LETTER_QUEUES: string[] = [
   QUEUES.PIPELINE_EXECUTIONS,
   QUEUES.STEP_RESULTS,
-  ...Array.from(QUEUES.STEP.values()).map((s) => s.queueName),
+  ...QUEUES.STEP,
 ];
 
 const TERMINAL_EXECUTION_STATUSES: PipelineExecutionStatus[] = [
