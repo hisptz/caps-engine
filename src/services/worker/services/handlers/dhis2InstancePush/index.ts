@@ -1,17 +1,21 @@
+import path from "node:path";
 import { chunk } from "lodash-es";
 import { z } from "zod";
 import type { AxiosInstance } from "axios";
 import {
+  StepPermanentError,
   StepSkippedError,
   type StepContext,
   type StepHandler,
 } from "@/services/worker/types/service.ts";
 import { createRouteClient, describeRouteError, dhis2RestClient } from "@/shared/clients/dhis.ts";
 import { StepError } from "@/shared/utils/error.ts";
+import { env } from "@/shared/utils/env.ts";
 import type { DataValue } from "@/services/worker/types/data.ts";
 import { sendDataValues } from "@/services/worker/utils/sendDataValues.ts";
 import { periodToOccurredAt } from "@/services/worker/utils/periods.ts";
 import { resolveOrgUnitsWithTask } from "@/services/worker/utils/orgUnitSelection.ts";
+import { hasOrgUnitSelection } from "@/services/worker/schemas/orgUnit.ts";
 import { toComboMeta } from "@/services/worker/services/handlers/dhis2InstancePull/utils/categoryCombos.ts";
 import {
   isOpenForPeriod,
@@ -38,8 +42,10 @@ export type Dhis2InstancePushOutput = {
   routeCode: string;
   source: Dhis2InstancePushConfig["source"];
   status: string;
-  /** Data values read from staging. */
+  /** Data values read from staging, or from the previous step's file. */
   read: number;
+  /** Values in the previous step's file for data elements the step doesn't push; left out. */
+  unlisted: number;
   /** Data values sent to the target. */
   sent: number;
   imported: number;
@@ -258,6 +264,14 @@ async function runPreflight(
   }
 }
 
+/** The period of a staging read; the schema requires one unless the source is the previous step. */
+function stagingPeriod(config: Dhis2InstancePushConfig): PushPeriod {
+  if (!config.period) {
+    throw new Error("Reading staging needs a period");
+  }
+  return config.period;
+}
+
 /** The period filter of a staging read: `lastUpdatedDuration`, or the period IDs to read. */
 function periodParams(period: PushPeriod): { lastUpdatedDuration: string } | { periods: string[] } {
   return period.mode === "updated"
@@ -278,10 +292,11 @@ async function readStagingAnalytics(
   plans: PushPlan[],
   orgUnits: string[]
 ): Promise<DataValue[]> {
-  if (config.period.mode === "updated") {
+  const period = stagingPeriod(config);
+  if (period.mode === "updated") {
     throw new Error("Analytics can't be read by last update");
   }
-  const periods = resolvePullPeriods(config.period);
+  const periods = resolvePullPeriods(period);
   const dxChunks = chunk(analyticsDxItems(plans), DX_ITEMS_PER_REQUEST);
   const periodChunks = chunk(periods, config.chunk.periods);
   const orgUnitChunks = chunk(orgUnits, config.chunk.orgUnits);
@@ -338,7 +353,7 @@ async function readStagingValues(
   config: Dhis2InstancePushConfig,
   orgUnits: string[]
 ): Promise<DataValue[]> {
-  const filter = periodParams(config.period);
+  const filter = periodParams(stagingPeriod(config));
   const batches = chunk(orgUnits, config.chunk.orgUnits);
   const task = await ctx.tasks.startTask("read-staging", {
     orgUnits: orgUnits.length,
@@ -374,13 +389,114 @@ async function readStagingValues(
 }
 
 /**
+ * The data value set file the previous step wrote (`ctx.input.filename`, under OUTPUTS_DIR),
+ * e.g. by dhis2-instance-pull. Its values are in staging IDs.
+ */
+async function readPreviousStepFile(ctx: StepContext): Promise<DataValue[]> {
+  const input = ctx.input as { filename?: unknown } | undefined;
+  const filename = typeof input?.filename === "string" ? input.filename : undefined;
+  if (!filename) {
+    throw new StepPermanentError(
+      "The push reads the previous step's values, but the previous step left no data value file. Put it after a step that writes one, such as DHIS2 Instance Pull."
+    );
+  }
+  const filePath = path.resolve(env.OUTPUTS_DIR, filename);
+  const task = await ctx.tasks.startTask("read-file", { filePath });
+  try {
+    let raw: unknown;
+    try {
+      raw = await Bun.file(filePath).json();
+    } catch (err) {
+      throw new Error(`Failed to read data value set file at "${filePath}": ${String(err)}`, {
+        cause: err,
+      });
+    }
+    const parsed = stagingDataValueSetSchema.safeParse(raw ?? {});
+    if (!parsed.success) {
+      throw new StepPermanentError(
+        `The previous step's file isn't a data value set: ${parsed.error.message}`
+      );
+    }
+    await task.succeed({ count: parsed.data.dataValues.length });
+    return parsed.data.dataValues;
+  } catch (err) {
+    await task.fail(err instanceof Error ? err : new Error(String(err)));
+    throw err;
+  }
+}
+
+/** The step's org units; the schema requires them unless the source is the previous step. */
+function requiredOrgUnit(config: Dhis2InstancePushConfig) {
+  if (!hasOrgUnitSelection(config.orgUnit)) {
+    throw new Error("Reading staging needs org units");
+  }
+  return config.orgUnit;
+}
+
+/**
+ * The previous step's values for the listed data elements, and the org units to send: the
+ * file's, narrowed to the step's own selection when it has one. No values skips the step.
+ */
+async function readFileValues(
+  ctx: StepContext,
+  config: Dhis2InstancePushConfig
+): Promise<{ values: DataValue[]; orgUnits: string[]; read: number; unlisted: number }> {
+  const all = await readPreviousStepFile(ctx);
+  if (all.length === 0) {
+    throw new StepSkippedError("The previous step found no values to push", { count: 0 });
+  }
+  const listed = new Set(config.items.map((item) => item.from));
+  const values = all.filter((value) => listed.has(value.dataElement));
+  const unlisted = all.length - values.length;
+  if (unlisted > 0) {
+    await ctx.log(
+      "WARN",
+      "The previous step's file has values for data elements this step doesn't push; they are left out",
+      {
+        count: unlisted,
+        dataElements: [...new Set(all.map((v) => v.dataElement))]
+          .filter((id) => !listed.has(id))
+          .slice(0, 50),
+      }
+    );
+  }
+
+  let orgUnits = [...new Set(values.map((value) => value.orgUnit))];
+  if (hasOrgUnitSelection(config.orgUnit)) {
+    const selected = new Set(await resolveOrgUnitsWithTask(ctx, config.orgUnit));
+    const outside = orgUnits.filter((id) => !selected.has(id));
+    orgUnits = orgUnits.filter((id) => selected.has(id));
+    if (outside.length > 0) {
+      await ctx.log("INFO", "Values for org units outside the step's selection are left out", {
+        orgUnits: outside.length,
+      });
+    }
+  }
+  const kept = new Set(orgUnits);
+  const sent = values.filter((value) => kept.has(value.orgUnit));
+  if (sent.length === 0) {
+    throw new StepSkippedError(
+      unlisted > 0 && values.length === 0
+        ? "None of the previous step's values are for data elements this step pushes"
+        : "None of the previous step's values are for the selected org units",
+      { count: 0, read: all.length }
+    );
+  }
+  return { values: sent, orgUnits, read: all.length, unlisted };
+}
+
+/**
  * Handler: dhis2-instance-push
  *
- * Sends data values from staging to a connected DHIS2 instance, through a `caps-src-` route on
- * staging: the counterpart of dhis2-instance-pull. It reads staging itself, so it works as a
- * pipeline of its own (e.g. a weekly push to the HMIS) or as the last step after an upload.
+ * Sends data values to a connected DHIS2 instance, through a `caps-src-` route on staging: the
+ * counterpart of dhis2-instance-pull. It reads staging itself, so it works as a pipeline of its
+ * own (e.g. a weekly push to the HMIS) or as the last step after an upload. With
+ * `source: "previous"` it sends the previous step's file instead, so values move from one
+ * instance to another (pull → push) without being stored on staging.
  *
- *   1. Resolve the selected staging org units.
+ *   1. Resolve the selected staging org units. With the previous step's file: read it first
+ *      (none skips the step), keep the values of the listed data elements, and take the file's
+ *      org units, narrowed to the selected ones when the step has some.
  *   2. Preflight: the route works, every listed data element exists on staging and its target
  *      on the target instance, their option combos line up (see `planPushItems`), and the
  *      selected org units have a match on the target by ID or code (unmatched ones are skipped
@@ -394,6 +510,7 @@ async function readStagingValues(
  *      (DHIS2 would reject them), and POST /dataValueSets in chunks of `chunk.values`, one task
  *      each. A chunk the target rejects (status ERROR) fails the step; chunks before it are
  *      already stored.
+ *   Step 3 is left out with the previous step's file: its values are already read.
  *
  * Config: Dhis2InstancePushConfig. Output: Dhis2InstancePushOutput.
  */
@@ -413,14 +530,18 @@ export const dhis2InstancePush: StepHandler = {
       period: config.period,
     });
 
-    const stagingOrgUnits = await resolveOrgUnitsWithTask(ctx, config.orgUnit);
+    const fromFile = config.source === "previous" ? await readFileValues(ctx, config) : undefined;
+    const stagingOrgUnits = fromFile
+      ? fromFile.orgUnits
+      : await resolveOrgUnitsWithTask(ctx, requiredOrgUnit(config));
     const target = createRouteClient(routeCode);
     const { plans, targetOrgUnitByStaging, targetUnits, skippedOrgUnits, targetVersion } =
       await runPreflight(ctx, config, target, stagingOrgUnits);
 
     const orgUnitsToRead = [...targetOrgUnitByStaging.keys()];
-    const values =
-      config.source === "analytics"
+    const values = fromFile
+      ? fromFile.values
+      : config.source === "analytics"
         ? await readStagingAnalytics(ctx, config, plans, orgUnitsToRead)
         : await readStagingValues(ctx, config, orgUnitsToRead);
     if (values.length === 0) {
@@ -480,7 +601,8 @@ export const dhis2InstancePush: StepHandler = {
       routeCode,
       source: config.source,
       status,
-      read: values.length,
+      read: fromFile ? fromFile.read : values.length,
+      unlisted: fromFile?.unlisted ?? 0,
       sent: dataValues.length,
       imported: totals.imported,
       updated: totals.updated,
