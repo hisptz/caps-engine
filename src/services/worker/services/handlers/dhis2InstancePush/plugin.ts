@@ -5,7 +5,8 @@ import { dhis2InstancePushConfigSchema, dhis2InstancePushContextSchema } from ".
 export default definePlugin({
   key: Handlers.DHIS2_INSTANCE_PUSH,
   displayName: "DHIS2 Instance Push",
-  description: "Sends data values from staging to another DHIS2 instance through a staging route",
+  description:
+    "Sends data values from staging, or from the previous step without storing them on staging, to another DHIS2 instance through a staging route",
   tags: ["dhis2", "push"],
   outputs: { fields: [] },
   schemas: {

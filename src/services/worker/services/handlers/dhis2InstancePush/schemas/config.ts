@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { SOURCE_ROUTE_CODE_PATTERN } from "@/shared/constants/sourceRoutes.ts";
 import { capsField } from "@/shared/handlers/fields.ts";
-import { orgUnitConfigSchema } from "@/services/worker/schemas/orgUnit.ts";
+import {
+  hasOrgUnitSelection,
+  optionalOrgUnitConfigSchema,
+  type OrgUnitConfigInput,
+} from "@/services/worker/schemas/orgUnit.ts";
 import { dataValueImportStrategySchema } from "@/services/worker/services/handlers/dhis2DataUpload/schemas/config.ts";
 import {
   fixedPullPeriodSchema,
@@ -45,12 +49,17 @@ export const pushPeriodSchema = z.discriminatedUnion("mode", [
 export type PushPeriod = z.infer<typeof pushPeriodSchema>;
 
 /**
- * Where values on staging are read from:
- * - raw: data values as entered, at exactly the selected org units (`GET /dataValueSets`);
- * - analytics: totals rolled up to the selected org units (`GET /analytics/dataValueSet`), as
- *   of staging's last analytics run. Periods only: analytics can't filter by last update.
+ * Where the values to push are read from:
+ * - raw: data values on staging as entered, at exactly the selected org units
+ *   (`GET /dataValueSets`);
+ * - analytics: totals on staging rolled up to the selected org units
+ *   (`GET /analytics/dataValueSet`), as of staging's last analytics run. Periods only:
+ *   analytics can't filter by last update;
+ * - previous: the data value set file the previous step wrote (e.g. dhis2-instance-pull), in
+ *   staging IDs. Nothing is read from or stored on staging's data; staging's data elements and
+ *   org units are only used to map the values to the target. The file sets the periods.
  */
-export const pushSourceSchema = z.enum(["raw", "analytics"]);
+export const pushSourceSchema = z.enum(["raw", "analytics", "previous"]);
 
 export type PushSource = z.infer<typeof pushSourceSchema>;
 
@@ -96,10 +105,15 @@ const pushConfigFields = {
     .refine((ids) => new Set(ids).size === ids.length, "Each data element may only be listed once")
     .optional(),
   source: pushSourceSchema.default("raw"),
-  /** Staging org units whose values are sent. */
-  orgUnit: orgUnitConfigSchema,
+  /**
+   * Staging org units whose values are sent. Required when reading staging; with the previous
+   * step's file it narrows the file's org units, and every org unit in the file is sent when
+   * left out or empty.
+   */
+  orgUnit: optionalOrgUnitConfigSchema.optional(),
   orgUnitMatch: z.enum(["id", "code"]).default("id"),
-  period: pushPeriodSchema,
+  /** Which staging values to read. Required when reading staging; the file sets its own. */
+  period: pushPeriodSchema.optional(),
   importStrategy: dataValueImportStrategySchema.default("CREATE_AND_UPDATE"),
   chunk: z
     .object({
@@ -113,8 +127,27 @@ const pushConfigFields = {
     .default({ orgUnits: 50, periods: 12, values: 2_000 }),
 };
 
-function checkPushConfig(config: { source: PushSource; period: PushPeriod }, ctx: z.RefinementCtx) {
-  if (config.source === "analytics" && config.period.mode === "updated") {
+function checkPushConfig(
+  config: { source: PushSource; period?: PushPeriod; orgUnit?: OrgUnitConfigInput },
+  ctx: z.RefinementCtx
+) {
+  if (config.source !== "previous") {
+    if (!hasOrgUnitSelection(config.orgUnit)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["orgUnit"],
+        message: "Pick the staging org units whose values are pushed",
+      });
+    }
+    if (config.period === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["period"],
+        message: "Pick which staging values to read: recently updated ones or a range of periods",
+      });
+    }
+  }
+  if (config.source === "analytics" && config.period?.mode === "updated") {
     ctx.addIssue({
       code: "custom",
       path: ["period", "mode"],

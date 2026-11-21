@@ -9,12 +9,17 @@ const orgUnitConfigBaseSchema = z.object({
 
 export type OrgUnitConfigInput = z.infer<typeof orgUnitConfigBaseSchema>;
 
+export function hasOrgUnitSelection(ou: OrgUnitConfigInput | undefined): ou is OrgUnitConfigInput {
+  return (
+    (ou?.ids?.length ?? 0) > 0 || (ou?.levels?.length ?? 0) > 0 || (ou?.groups?.length ?? 0) > 0
+  );
+}
+
+export const optionalOrgUnitConfigSchema = capsField(orgUnitConfigBaseSchema, "orgUnits");
+
 export const orgUnitConfigSchema = capsField(
   orgUnitConfigBaseSchema.superRefine((ou, ctx) => {
-    const hasIds = (ou.ids?.length ?? 0) > 0;
-    const hasLevels = (ou.levels?.length ?? 0) > 0;
-    const hasGroups = (ou.groups?.length ?? 0) > 0;
-    if (!hasIds && !hasLevels && !hasGroups) {
+    if (!hasOrgUnitSelection(ou)) {
       ctx.addIssue({
         code: "custom",
         message:

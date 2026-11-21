@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { buildMockContext } from "@/tests/utils/helpers.ts";
+import { stubBun } from "@/tests/utils/bun.ts";
 
 // ── Mocks (hoisted before imports) ────────────────────────────────────────────
 
@@ -21,7 +22,7 @@ vi.mock("@/shared/clients/dhis.ts", async (importOriginal) => {
 
 import { createRouteClient, dhis2RestClient } from "@/shared/clients/dhis.ts";
 import { dhis2InstancePush } from "@/services/worker/services/handlers/dhis2InstancePush/index.ts";
-import { StepSkippedError } from "@/services/worker/types/service.ts";
+import { StepPermanentError, StepSkippedError } from "@/services/worker/types/service.ts";
 import { StepError } from "@/shared/utils/error.ts";
 import { dhis2InstancePushConfigSchema } from "@/services/worker/services/handlers/dhis2InstancePush/schemas/config.ts";
 
@@ -185,6 +186,27 @@ describe("dhis2InstancePushConfigSchema", () => {
     expect(dhis2InstancePushConfigSchema.safeParse(baseConfig({ mapped: [CASES] })).success).toBe(
       false
     );
+  });
+
+  it("needs org units and a period to read staging, but not to send the previous step's file", () => {
+    const withoutBoth = baseConfig({ orgUnit: undefined, period: undefined });
+    const raw = dhis2InstancePushConfigSchema.safeParse(withoutBoth);
+    expect(raw.success).toBe(false);
+    expect(raw.error!.issues.map((issue) => issue.path.join("."))).toEqual(["orgUnit", "period"]);
+    expect(
+      dhis2InstancePushConfigSchema.safeParse({ ...withoutBoth, source: "previous" }).success
+    ).toBe(true);
+    // The app keeps an empty selection when none is picked.
+    expect(
+      dhis2InstancePushConfigSchema.safeParse({
+        ...withoutBoth,
+        source: "previous",
+        orgUnit: { levels: [] },
+      }).success
+    ).toBe(true);
+    expect(
+      dhis2InstancePushConfigSchema.safeParse(baseConfig({ orgUnit: { levels: [] } })).success
+    ).toBe(false);
   });
 });
 
@@ -351,5 +373,111 @@ describe("dhis2-instance-push", () => {
     await expect(
       dhis2InstancePush.execute(context(baseConfig({ orgUnit: {}, period: undefined })))
     ).rejects.toThrow(/Invalid dhis2-instance-push handlerConfig/);
+  });
+});
+
+describe("dhis2-instance-push from the previous step's file", () => {
+  const mockFileJson = vi.fn();
+  const fileValues = [
+    { dataElement: CASES, period: "202601", orgUnit: OU_A, value: "10" },
+    { dataElement: RISK, period: "202601", orgUnit: OU_B, value: "0.5" },
+    { dataElement: "notListed01", period: "202601", orgUnit: OU_A, value: "3" },
+  ];
+
+  function fileContext(
+    overrides: Record<string, unknown> = {},
+    input: unknown = { filename: "pull.json" }
+  ) {
+    return buildMockContext({
+      handlerConfig: baseConfig({
+        source: "previous",
+        orgUnit: undefined,
+        period: undefined,
+        ...overrides,
+      }),
+      input,
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    valueReads.length = 0;
+    analyticsReads.length = 0;
+    mockTarget();
+    mockStaging();
+    stubBun({ file: vi.fn(() => ({ json: mockFileJson })) });
+    mockFileJson.mockResolvedValue({ dataValues: fileValues });
+  });
+
+  it("sends the file's values mapped to the target without reading staging's data", async () => {
+    const ctx = fileContext();
+    const result = await dhis2InstancePush.execute(ctx);
+
+    expect(valueReads).toHaveLength(0);
+    expect(analyticsReads).toHaveLength(0);
+    expect(mockTargetPost.mock.calls[0]![1].dataValues).toEqual([
+      { dataElement: CASES, period: "202601", orgUnit: OU_A, value: "10" },
+      { dataElement: RISK_TARGET, period: "202601", orgUnit: OU_B, value: "0.5" },
+    ]);
+    expect(result).toMatchObject({ source: "previous", read: 3, unlisted: 1, sent: 2 });
+    expect(ctx.log).toHaveBeenCalledWith(
+      "WARN",
+      expect.stringContaining("doesn't push"),
+      expect.objectContaining({ count: 1, dataElements: ["notListed01"] })
+    );
+  });
+
+  it("sends every org unit in the file when the selection is empty", async () => {
+    const result = await dhis2InstancePush.execute(fileContext({ orgUnit: { levels: [] } }));
+    expect(result).toMatchObject({ sent: 2 });
+  });
+
+  it("narrows the file to the step's org units when it has some", async () => {
+    const result = await dhis2InstancePush.execute(fileContext({ orgUnit: { ids: [OU_A] } }));
+    expect(mockTargetPost.mock.calls[0]![1].dataValues).toEqual([
+      { dataElement: CASES, period: "202601", orgUnit: OU_A, value: "10" },
+    ]);
+    expect(result).toMatchObject({ sent: 1 });
+  });
+
+  it("matches the file's org units on the target by code", async () => {
+    mockStaging({ [OU_A]: "OU_A_CODE", [OU_B]: "OU_B_CODE" });
+    mockTarget({
+      orgUnits: [
+        { id: "targetOuA01", code: "OU_A_CODE" },
+        { id: "targetOuB01", code: "OU_B_CODE" },
+      ],
+    });
+    await dhis2InstancePush.execute(fileContext({ orgUnitMatch: "code" }));
+    expect(mockTargetPost.mock.calls[0]![1].dataValues.map((value) => value.orgUnit)).toEqual([
+      "targetOuA01",
+      "targetOuB01",
+    ]);
+  });
+
+  it("is skipped when the previous step found no values, without calling the target", async () => {
+    mockFileJson.mockResolvedValue({ dataValues: [] });
+    await expect(dhis2InstancePush.execute(fileContext())).rejects.toThrow(StepSkippedError);
+    expect(mockTargetGet).not.toHaveBeenCalled();
+  });
+
+  it("is skipped when none of the file's values are for the listed data elements", async () => {
+    mockFileJson.mockResolvedValue({ dataValues: [fileValues[2]] });
+    await expect(dhis2InstancePush.execute(fileContext())).rejects.toThrow(
+      /None of the previous step's values are for data elements/
+    );
+  });
+
+  it("fails for good when the previous step left no file", async () => {
+    await expect(dhis2InstancePush.execute(fileContext({}, null))).rejects.toThrow(
+      StepPermanentError
+    );
+  });
+
+  it("fails for good on a file that isn't a data value set", async () => {
+    mockFileJson.mockResolvedValue({ dataValues: [{ dataElement: CASES }] });
+    await expect(dhis2InstancePush.execute(fileContext())).rejects.toThrow(
+      /isn't a data value set/
+    );
   });
 });
