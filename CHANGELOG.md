@@ -1,3 +1,9 @@
+## [3.4.1](https://github.com/hisptz/caps-engine/compare/v3.4.0...v3.4.1) (2026-11-21)
+
+### Bug Fixes
+
+- enhance dhis2 instance push to support reading from previous step's file and improve org unit selection validation ([337de26](https://github.com/hisptz/caps-engine/commit/337de26648c7b0e45c20b80644db62ab645c9c7a))
+
 # [3.4.0](https://github.com/hisptz/caps-engine/compare/v3.3.2...v3.4.0) (2026-11-19)
 
 ### Features
