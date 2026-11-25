@@ -34,7 +34,7 @@ const uid = z.string().regex(/^[A-Za-z][A-Za-z0-9]{10}$/, {
 const periodTypeSchema = z.enum(["WEEKLY", "MONTHLY"]);
 
 export const climateVariableSchema = z.object({
-  /** Open Climate Service dataset, e.g. "era5_land.total_precipitation" */
+  /** Open Geo Service dataset, e.g. "era5_land.total_precipitation" */
   datasetId: z.string().min(1),
   label: z.string().trim().min(1).max(60).optional(),
   dataElement: uid,
@@ -286,13 +286,13 @@ export function checkAgainstSetup(
   return { errors, warnings };
 }
 
-/** An Open Climate Service dataset and how often it has values ("daily", "monthly", …). */
+/** An Open Geo Service dataset and how often it has values ("daily", "monthly", …). */
 export type ClimateDataset = { id: string; periodType: string | null };
 
 const PERIOD_LENGTH: Record<string, number> = { daily: 1, weekly: 7, monthly: 30 };
 
 /**
- * Each climate variable needs a dataset OCS has, with values at least as often as the
+ * Each climate variable needs a dataset geoservice has, with values at least as often as the
  * workflow's periods: daily data adds up to weeks, monthly data cannot be split into weeks.
  */
 export function checkClimateDatasets(
@@ -308,7 +308,7 @@ export function checkClimateDatasets(
       return [
         {
           path,
-          message: `Open Climate Service has no dataset "${variable.datasetId}"; ingest it on the Climate data page first`,
+          message: `Open Geo Service has no dataset "${variable.datasetId}"; ingest it on the Climate data page first`,
         },
       ];
     }
@@ -456,16 +456,16 @@ function climatePipeline(
   const labels = params.climate.map((v) => variableLabel(v, names));
   return {
     role: "climate",
-    name: `Fetch ${period} climate data from Open Climate Service${suffix}`,
-    description: `Fetches ${recentPhrase(params)} of ${listWords(labels)} for ${orgUnitPhrase(params, setup)} from Open Climate Service and uploads them to staging.`,
+    name: `Fetch ${period} climate data from Open Geo Service${suffix}`,
+    description: `Fetches ${recentPhrase(params)} of ${listWords(labels)} for ${orgUnitPhrase(params, setup)} from Open Geo Service and uploads them to staging.`,
     onFailure: params.notify.onFailure,
     steps: [
-      // OCS can only serve what it has ingested; bring every dataset up to date first
+      // Geoservice can only serve what it has ingested; bring every dataset up to date first
       {
         name: "Update climate datasets",
         description:
-          "Brings the chosen Open Climate Service datasets up to date, so the newest period is there.",
-        handlerKey: Handlers.OPEN_CLIMATE_SERVICE_SYNC,
+          "Brings the chosen Open Geo Service datasets up to date, so the newest period is there.",
+        handlerKey: Handlers.OPEN_GEO_SERVICE_SYNC,
         handlerConfig: {
           datasetIds: [...new Set(params.climate.map((v) => v.datasetId))],
         },
@@ -474,7 +474,7 @@ function climatePipeline(
         const label = variableLabel(variable, names);
         return [
           {
-            name: `Request ${label} from Open Climate Service`,
+            name: `Request ${label} from Open Geo Service`,
             description: `Asks for ${period} ${label} (${variable.datasetId}), ${variable.aggregation} per org unit, and gets a job back.`,
             handlerKey: Handlers.CLIMATE_OPENEO_CREATE,
             handlerConfig: {
@@ -494,7 +494,7 @@ function climatePipeline(
           },
           {
             name: `Wait for ${label} to be calculated`,
-            description: "Checks the Open Climate Service job until it finishes.",
+            description: "Checks the Open Geo Service job until it finishes.",
             handlerKey: Handlers.CLIMATE_OPENEO_POLL,
             handlerConfig: {},
           },

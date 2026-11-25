@@ -2,28 +2,28 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { buildMockContext } from "@/tests/utils/helpers.ts";
 import { StepPermanentError, StepWaitingError } from "@/services/worker/types/service.ts";
 
-vi.mock("@/shared/clients/ocsPipelines.ts", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/shared/clients/ocsPipelines.ts")>()),
-  getOcsDatasetPeriodType: vi.fn(),
-  getOcsPipeline: vi.fn(),
-  getOcsPipelineRun: vi.fn(),
-  startOcsPipelineRun: vi.fn(),
+vi.mock("@/shared/clients/geoservicePipelines.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/shared/clients/geoservicePipelines.ts")>()),
+  getGeoserviceDatasetPeriodType: vi.fn(),
+  getGeoservicePipeline: vi.fn(),
+  getGeoservicePipelineRun: vi.fn(),
+  startGeoservicePipelineRun: vi.fn(),
 }));
 
 import {
-  getOcsDatasetPeriodType,
-  getOcsPipeline,
-  getOcsPipelineRun,
-  startOcsPipelineRun,
-  type OcsPipeline,
-  type OcsPipelineRun,
-} from "@/shared/clients/ocsPipelines.ts";
-import { ocsPipelineRun } from "@/services/worker/services/handlers/ocsPipelineRun/index.ts";
+  getGeoserviceDatasetPeriodType,
+  getGeoservicePipeline,
+  getGeoservicePipelineRun,
+  startGeoservicePipelineRun,
+  type GeoservicePipeline,
+  type GeoservicePipelineRun,
+} from "@/shared/clients/geoservicePipelines.ts";
+import { geoservicePipelineRun } from "@/services/worker/services/handlers/geoservicePipelineRun/index.ts";
 
-const mockGetPipeline = vi.mocked(getOcsPipeline);
-const mockDatasetPeriodType = vi.mocked(getOcsDatasetPeriodType);
-const mockGetRun = vi.mocked(getOcsPipelineRun);
-const mockStartRun = vi.mocked(startOcsPipelineRun);
+const mockGetPipeline = vi.mocked(getGeoservicePipeline);
+const mockDatasetPeriodType = vi.mocked(getGeoserviceDatasetPeriodType);
+const mockGetRun = vi.mocked(getGeoservicePipelineRun);
+const mockStartRun = vi.mocked(startGeoservicePipelineRun);
 
 const config = {
   pipelineId: "chirps-precip-district",
@@ -34,7 +34,7 @@ const config = {
 function pipeline(
   mode: "live" | "dry_run",
   policy: "manual" | "on_update" = "manual"
-): OcsPipeline {
+): GeoservicePipeline {
   return {
     spec: {
       id: "chirps-precip-district",
@@ -60,9 +60,9 @@ function pipeline(
 }
 
 function run(
-  status: OcsPipelineRun["status"],
-  extra: Partial<OcsPipelineRun> = {}
-): OcsPipelineRun {
+  status: GeoservicePipelineRun["status"],
+  extra: Partial<GeoservicePipelineRun> = {}
+): GeoservicePipelineRun {
   return { run_id: "r1", status, mode: "live", start: "2025-01-01", end: "2025-03-31", ...extra };
 }
 
@@ -85,7 +85,9 @@ describe("ocs-pipeline-run", () => {
     mockGetPipeline.mockResolvedValue(pipeline("live"));
     mockStartRun.mockResolvedValue(run("queued"));
 
-    const error = await caught(ocsPipelineRun.execute(buildMockContext({ handlerConfig: config })));
+    const error = await caught(
+      geoservicePipelineRun.execute(buildMockContext({ handlerConfig: config }))
+    );
 
     expect(mockStartRun).toHaveBeenCalledWith("chirps-precip-district", {
       start: "2025-01-01",
@@ -100,7 +102,9 @@ describe("ocs-pipeline-run", () => {
   it("refuses a live run of a pipeline that is not live, without starting it", async () => {
     mockGetPipeline.mockResolvedValue(pipeline("dry_run"));
 
-    const error = await caught(ocsPipelineRun.execute(buildMockContext({ handlerConfig: config })));
+    const error = await caught(
+      geoservicePipelineRun.execute(buildMockContext({ handlerConfig: config }))
+    );
 
     expect(error).toBeInstanceOf(StepPermanentError);
     expect(mockStartRun).not.toHaveBeenCalled();
@@ -110,7 +114,9 @@ describe("ocs-pipeline-run", () => {
     mockGetPipeline.mockResolvedValue(pipeline("live"));
     mockDatasetPeriodType.mockResolvedValue("daily");
 
-    const error = await caught(ocsPipelineRun.execute(buildMockContext({ handlerConfig: config })));
+    const error = await caught(
+      geoservicePipelineRun.execute(buildMockContext({ handlerConfig: config }))
+    );
 
     expect(mockDatasetPeriodType).toHaveBeenCalledWith("era5land_precipitation_monthly");
     expect(error).toBeInstanceOf(StepPermanentError);
@@ -122,18 +128,20 @@ describe("ocs-pipeline-run", () => {
     mockGetPipeline.mockResolvedValue(pipeline("live"));
     mockDatasetPeriodType.mockResolvedValue("yearly");
 
-    const error = await caught(ocsPipelineRun.execute(buildMockContext({ handlerConfig: config })));
+    const error = await caught(
+      geoservicePipelineRun.execute(buildMockContext({ handlerConfig: config }))
+    );
 
     expect((error as Error).message).toContain("daily, weekly and monthly datasets only");
     expect(mockStartRun).not.toHaveBeenCalled();
   });
 
-  it("warns when OCS also starts the pipeline on dataset updates", async () => {
+  it("warns when geoservice also starts the pipeline on dataset updates", async () => {
     mockGetPipeline.mockResolvedValue(pipeline("live", "on_update"));
     mockStartRun.mockResolvedValue(run("queued"));
     const ctx = buildMockContext({ handlerConfig: config });
 
-    await caught(ocsPipelineRun.execute(ctx));
+    await caught(geoservicePipelineRun.execute(ctx));
 
     expect(ctx.log).toHaveBeenCalledWith(
       "WARN",
@@ -149,7 +157,7 @@ describe("ocs-pipeline-run", () => {
       waitState: { runId: "r1", start: "2025-01-01", end: "2025-03-31", lastStatus: "running" },
     });
 
-    const output = await ocsPipelineRun.execute(ctx);
+    const output = await geoservicePipelineRun.execute(ctx);
 
     expect(output).toMatchObject({ status: "succeeded", submitted: 0 });
     expect(ctx.log).toHaveBeenCalledWith(
@@ -172,7 +180,7 @@ describe("ocs-pipeline-run", () => {
       waitState: { runId: "r1", start: "2025-01-01", end: "2025-03-31", lastStatus: "running" },
     });
 
-    const output = await ocsPipelineRun.execute(ctx);
+    const output = await geoservicePipelineRun.execute(ctx);
 
     expect(mockGetRun).toHaveBeenCalledWith("chirps-precip-district", "r1");
     expect(output).toMatchObject({
@@ -189,7 +197,7 @@ describe("ocs-pipeline-run", () => {
     );
     const ctx = buildMockContext({ handlerConfig: config, waitState: { runId: "r1" } });
 
-    const error = await caught(ocsPipelineRun.execute(ctx));
+    const error = await caught(geoservicePipelineRun.execute(ctx));
 
     expect(error).toBeInstanceOf(StepPermanentError);
     expect((error as Error).message).toContain("3 conflicts");
@@ -202,7 +210,7 @@ describe("ocs-pipeline-run", () => {
       waitState: { runId: "r1", statusErrors: 2 },
     });
 
-    const error = await caught(ocsPipelineRun.execute(ctx));
+    const error = await caught(geoservicePipelineRun.execute(ctx));
 
     expect(error).toBeInstanceOf(StepWaitingError);
     expect((error as StepWaitingError).state).toMatchObject({ statusErrors: 3 });

@@ -3,8 +3,8 @@ import { definePlugin } from "@/shared/handlers/plugin.ts";
 
 export default definePlugin({
   key: Handlers.CLIMATE_OPENEO_DOWNLOAD,
-  displayName: "Open Climate Service Download",
-  description: "Download DHIS2 data values from a finished Open Climate Service job",
+  displayName: "Open Geo Service Download",
+  description: "Download DHIS2 data values from a finished Open Geo Service job",
   tags: ["climate", "openeo"],
   outputs: {
     fields: [{ key: "count", label: "Values downloaded", type: "number" }],

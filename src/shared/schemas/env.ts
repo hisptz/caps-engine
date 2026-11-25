@@ -12,5 +12,5 @@ export const envSchema = z.object({
   OUTPUTS_DIR: z.string().default("./outputs"),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().default(""),
   CLIMATE_API_BASE_URL: z.url().default("http://localhost:8001"),
-  OCS_DHIS2_CONNECTIONS: z.string().default(""),
+  GEOSERVICE_DHIS2_CONNECTIONS: z.string().default(""),
 });

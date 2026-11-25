@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const openClimateServiceSyncConfigSchema = z.object({
+export const openGeoServiceSyncConfigSchema = z.object({
   datasetIds: z
     .array(z.string().min(1))
     .min(1)
@@ -21,4 +21,4 @@ export const openClimateServiceSyncConfigSchema = z.object({
     .default({ pollIntervalMs: 10_000, maxAttempts: 150 }),
 });
 
-export type OpenClimateServiceSyncConfig = z.infer<typeof openClimateServiceSyncConfigSchema>;
+export type OpenGeoServiceSyncConfig = z.infer<typeof openGeoServiceSyncConfigSchema>;

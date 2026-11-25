@@ -12,10 +12,7 @@ import {
   type ClimateJobStatus,
   type ClimateSyncAction,
 } from "@/shared/clients/climateSync.ts";
-import {
-  openClimateServiceSyncConfigSchema,
-  type OpenClimateServiceSyncConfig,
-} from "./schemas/config.ts";
+import { openGeoServiceSyncConfigSchema, type OpenGeoServiceSyncConfig } from "./schemas/config.ts";
 
 export type DatasetSyncOutcome = {
   datasetId: string;
@@ -29,7 +26,7 @@ export type DatasetSyncOutcome = {
   jobId?: string;
 };
 
-export type OpenClimateServiceSyncOutput = {
+export type OpenGeoServiceSyncOutput = {
   datasets: DatasetSyncOutcome[];
   synced: number;
   upToDate: number;
@@ -39,7 +36,7 @@ export type OpenClimateServiceSyncOutput = {
 /**
  * Handler: open-climate-service-sync
  *
- * Brings Open Climate Service datasets up to date before a pipeline reads them, replacing the
+ * Brings Open Geo Service datasets up to date before a pipeline reads them, replacing the
  * manual monthly sync. Each dataset is its own task and runs alongside the others:
  *
  *   1. Ask the planner what a sync would do. Nothing to download → done, no job started.
@@ -48,9 +45,9 @@ export type OpenClimateServiceSyncOutput = {
  * A failed dataset fails the step unless `onFailure` is "continue", in which case later steps
  * run on the data already there.
  */
-export const openClimateServiceSync: StepHandler = {
+export const openGeoServiceSync: StepHandler = {
   async execute(ctx) {
-    const parsed = openClimateServiceSyncConfigSchema.safeParse(ctx.handlerConfig);
+    const parsed = openGeoServiceSyncConfigSchema.safeParse(ctx.handlerConfig);
     if (!parsed.success) {
       throw new Error(`Invalid open-climate-service-sync handlerConfig: ${parsed.error.message}`);
     }
@@ -78,7 +75,7 @@ export const openClimateServiceSync: StepHandler = {
             }
     );
 
-    const output: OpenClimateServiceSyncOutput = {
+    const output: OpenGeoServiceSyncOutput = {
       datasets,
       synced: datasets.filter((d) => d.outcome === "synced").length,
       upToDate: datasets.filter((d) => d.outcome === "up-to-date").length,
@@ -102,7 +99,7 @@ export const openClimateServiceSync: StepHandler = {
       );
     }
 
-    await ctx.log("INFO", "Open Climate Service sync finished", {
+    await ctx.log("INFO", "Open Geo Service sync finished", {
       synced: output.synced,
       upToDate: output.upToDate,
       failed: output.failed,
@@ -114,7 +111,7 @@ export const openClimateServiceSync: StepHandler = {
 async function syncDataset(
   ctx: StepContext,
   datasetId: string,
-  config: OpenClimateServiceSyncConfig
+  config: OpenGeoServiceSyncConfig
 ): Promise<DatasetSyncOutcome> {
   const task = await ctx.tasks.startTask(`sync:${datasetId}`, {
     datasetId,
@@ -187,7 +184,7 @@ async function waitForJob(
   task: TaskHandle,
   datasetId: string,
   jobId: string,
-  polling: OpenClimateServiceSyncConfig["polling"]
+  polling: OpenGeoServiceSyncConfig["polling"]
 ): Promise<void> {
   const { pollIntervalMs, maxAttempts } = polling;
   let lastStatus: ClimateJobStatus | "unknown" = "unknown";
@@ -222,7 +219,7 @@ async function waitForJob(
   throw new Error(
     `Sync job ${jobId} for "${datasetId}" did not finish within ` +
       `${(maxAttempts * pollIntervalMs) / 60_000} minutes (last status "${lastStatus}"). ` +
-      `It keeps running in the Open Climate Service; retry this step once it has finished.`
+      `It keeps running in the Open Geo Service; retry this step once it has finished.`
   );
 }
 

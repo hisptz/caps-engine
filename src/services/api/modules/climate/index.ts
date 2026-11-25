@@ -10,18 +10,18 @@ import {
   syncPlanQuerySchema,
   createIngestionSchema,
   syncDatasetSchema,
-  ocsPipelineIdParams,
-  ocsPipelineModeParams,
-  ocsPipelineCreateSchema,
-  ocsPipelineChangeSchema,
-  ocsPipelineIntervalSchema,
+  geoservicePipelineIdParams,
+  geoservicePipelineModeParams,
+  geoservicePipelineCreateSchema,
+  geoservicePipelineChangeSchema,
+  geoservicePipelineIntervalSchema,
 } from "@/services/api/modules/climate/model.ts";
-import { OcsPipelinesService } from "@/services/api/modules/climate/pipelinesService.ts";
+import { GeoservicePipelinesService } from "@/services/api/modules/climate/pipelinesService.ts";
 
 const climateService = new ClimateService();
-const ocsPipelines = new OcsPipelinesService();
+const geoservicePipelines = new GeoservicePipelinesService();
 
-const OCS_UNAVAILABLE = { "502": { description: "Climate API service unavailable" } };
+const GEOSERVICE_UNAVAILABLE = { "502": { description: "Climate API service unavailable" } };
 
 export const climateModule = new Elysia({ prefix: "/climate", tags: ["climate"] })
   .get("/collections", () => climateService.listCollections(), {
@@ -195,91 +195,99 @@ export const climateModule = new Elysia({ prefix: "/climate", tags: ["climate"] 
       },
     }
   )
-  // --- OCS pipelines: CAPS creates and edits them; the ocs-pipeline-run step runs them ---
-  .get("/pipelines", () => ocsPipelines.list(), {
+  // --- geoservice pipelines: CAPS creates and edits them; the geoservice-pipeline-run step runs them ---
+  .get("/pipelines", () => geoservicePipelines.list(), {
     detail: {
-      summary: "List OCS pipelines",
-      description: "Pipelines defined in Open Climate Service (workflow, inputs, DHIS2 mapping).",
+      summary: "List geoservice pipelines",
+      description: "Pipelines defined in Open Geo Service (workflow, inputs, DHIS2 mapping).",
       operationId: "listOcsPipelines",
-      responses: { "200": { description: "`{ items: [...] }`" }, ...OCS_UNAVAILABLE },
+      responses: { "200": { description: "`{ items: [...] }`" }, ...GEOSERVICE_UNAVAILABLE },
     },
   })
-  .get("/pipelines/options", () => ocsPipelines.options(), {
+  .get("/pipelines/options", () => geoservicePipelines.options(), {
     detail: {
-      summary: "OCS pipeline setup options",
+      summary: "Geoservice pipeline setup options",
       description:
         "Pipeline-ready workflows with the parameters a pipeline binds, datasets, feature collections and named DHIS2 connections.",
       operationId: "getOcsPipelineOptions",
-      responses: { "200": { description: "Options" }, ...OCS_UNAVAILABLE },
+      responses: { "200": { description: "Options" }, ...GEOSERVICE_UNAVAILABLE },
     },
   })
-  .get("/pipelines/:id", ({ params }) => ocsPipelines.get(params.id), {
-    params: ocsPipelineIdParams,
+  .get("/pipelines/:id", ({ params }) => geoservicePipelines.get(params.id), {
+    params: geoservicePipelineIdParams,
     detail: {
-      summary: "Get OCS pipeline",
+      summary: "Get geoservice pipeline",
       operationId: "getOcsPipeline",
       responses: {
         "200": { description: "The pipeline, resolved, with its latest run" },
         "404": { description: "Not found" },
-        ...OCS_UNAVAILABLE,
+        ...GEOSERVICE_UNAVAILABLE,
       },
     },
   })
-  .post("/pipelines", ({ body }) => ocsPipelines.create(body), {
-    body: ocsPipelineCreateSchema,
+  .post("/pipelines", ({ body }) => geoservicePipelines.create(body), {
+    body: geoservicePipelineCreateSchema,
     detail: {
-      summary: "Create OCS pipeline",
+      summary: "Create geoservice pipeline",
       description:
-        "Saved with delivery policy `manual` (CAPS starts its runs). OCS validates it first and refuses a failing one with 422 and its checks.",
+        "Saved with delivery policy `manual` (CAPS starts its runs). geoservice validates it first and refuses a failing one with 422 and its checks.",
       operationId: "createOcsPipeline",
       responses: {
         "200": { description: "Created" },
         "409": { description: "The id is taken" },
         "422": { description: "Validation failed; checks under details" },
-        ...OCS_UNAVAILABLE,
+        ...GEOSERVICE_UNAVAILABLE,
       },
     },
   })
-  .put("/pipelines/:id", ({ params, body }) => ocsPipelines.update(params.id, body), {
-    params: ocsPipelineIdParams,
-    body: ocsPipelineChangeSchema,
+  .put("/pipelines/:id", ({ params, body }) => geoservicePipelines.update(params.id, body), {
+    params: geoservicePipelineIdParams,
+    body: geoservicePipelineChangeSchema,
     detail: {
-      summary: "Update OCS pipeline",
+      summary: "Update geoservice pipeline",
       description:
         "Replace the definition. `revision` is the one read; a stale one is refused with 409.",
       operationId: "updateOcsPipeline",
       responses: {
         "200": { description: "Saved" },
-        "409": { description: "Changed in OCS since it was read" },
+        "409": { description: "Changed in geoservice since it was read" },
         "422": { description: "Validation failed" },
-        ...OCS_UNAVAILABLE,
+        ...GEOSERVICE_UNAVAILABLE,
       },
     },
   })
-  .post("/pipelines/:id/dry-run", ({ params, body }) => ocsPipelines.dryRun(params.id, body), {
-    params: ocsPipelineIdParams,
-    body: ocsPipelineIntervalSchema,
-    detail: {
-      summary: "Dry-run OCS pipeline",
-      description:
-        "Render one interval and have DHIS2 judge it without writing. Going live needs a passed dry run.",
-      operationId: "dryRunOcsPipeline",
-      responses: {
-        "200": { description: "The dry run: values rendered and DHIS2's verdict" },
-        ...OCS_UNAVAILABLE,
+  .post(
+    "/pipelines/:id/dry-run",
+    ({ params, body }) => geoservicePipelines.dryRun(params.id, body),
+    {
+      params: geoservicePipelineIdParams,
+      body: geoservicePipelineIntervalSchema,
+      detail: {
+        summary: "Dry-run geoservice pipeline",
+        description:
+          "Render one interval and have DHIS2 judge it without writing. Going live needs a passed dry run.",
+        operationId: "dryRunOcsPipeline",
+        responses: {
+          "200": { description: "The dry run: values rendered and DHIS2's verdict" },
+          ...GEOSERVICE_UNAVAILABLE,
+        },
       },
-    },
-  })
-  .post("/pipelines/:id/mode/:mode", ({ params }) => ocsPipelines.setMode(params.id, params.mode), {
-    params: ocsPipelineModeParams,
-    detail: {
-      summary: "Set OCS pipeline delivery mode",
-      description: "dry_run, live (needs a passed dry run of the current bindings) or paused.",
-      operationId: "setOcsPipelineMode",
-      responses: {
-        "200": { description: "The pipeline" },
-        "409": { description: "Cannot go live yet" },
-        ...OCS_UNAVAILABLE,
+    }
+  )
+  .post(
+    "/pipelines/:id/mode/:mode",
+    ({ params }) => geoservicePipelines.setMode(params.id, params.mode),
+    {
+      params: geoservicePipelineModeParams,
+      detail: {
+        summary: "Set geoservice pipeline delivery mode",
+        description: "dry_run, live (needs a passed dry run of the current bindings) or paused.",
+        operationId: "setOcsPipelineMode",
+        responses: {
+          "200": { description: "The pipeline" },
+          "409": { description: "Cannot go live yet" },
+          ...GEOSERVICE_UNAVAILABLE,
+        },
       },
-    },
-  });
+    }
+  );

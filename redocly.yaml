@@ -8,6 +8,6 @@ apis:
     x-openapi-ts:
       output: ./types/dhis.d.ts
   climateApi:
-    root: ./resources/open-climate-service.openapi.json
+    root: ./resources/open-geo-service.openapi.json
     x-openapi-ts:
       output: ./types/climateApi.d.ts

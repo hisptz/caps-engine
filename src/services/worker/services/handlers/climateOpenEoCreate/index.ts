@@ -16,7 +16,7 @@ export const climateOpenEoCreate: StepHandler = {
     const config = parsed.data;
     const temporalExtent = temporalExtentFromPeriod(config.period);
 
-    await ctx.log("INFO", "Starting Open Climate Service job creation", {
+    await ctx.log("INFO", "Starting Open Geo Service job creation", {
       datasetId: config.datasetId,
       period: config.period,
       temporalExtent,
@@ -107,7 +107,7 @@ export const climateOpenEoCreate: StepHandler = {
       throw error;
     }
 
-    await ctx.log("INFO", "Open Climate Service job created and started", {
+    await ctx.log("INFO", "Open Geo Service job created and started", {
       jobId,
       temporalExtent,
     });

@@ -7,7 +7,7 @@ import {
   type InstanceMapping,
 } from "@/shared/mappings/instanceMappings.ts";
 
-const MW = "caps-src-malawi";
+const MW = "caps-src-country";
 const TZ = "caps-src-tanzania";
 const CASES = "CasesAAAAAA";
 const DEATHS = "DeathsAAAAA";

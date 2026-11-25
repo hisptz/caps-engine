@@ -28,7 +28,7 @@ export const climateOpenEoPoll: StepHandler = {
       throw new Error("climate-openeo-poll requires { jobId } from the previous step's output");
     }
 
-    await ctx.log("INFO", "Starting poll for Open Climate Service job", { jobId });
+    await ctx.log("INFO", "Starting poll for Open Geo Service job", { jobId });
 
     const pollTask = await ctx.tasks.startTask("poll-openeo-job", { jobId });
 
@@ -43,7 +43,7 @@ export const climateOpenEoPoll: StepHandler = {
         const job = await getOpenEoJob(jobId);
         status = job.status;
       } catch (err) {
-        await ctx.log("WARN", "Failed to fetch Open Climate Service job status, will retry", {
+        await ctx.log("WARN", "Failed to fetch Open Geo Service job status, will retry", {
           jobId,
           attempt: attempts,
           error: String(err),
@@ -53,7 +53,7 @@ export const climateOpenEoPoll: StepHandler = {
       }
 
       if (status !== lastStatus) {
-        await ctx.log("INFO", "Open Climate Service job status update", {
+        await ctx.log("INFO", "Open Geo Service job status update", {
           jobId,
           status,
           attempt: attempts,
@@ -72,14 +72,14 @@ export const climateOpenEoPoll: StepHandler = {
           } catch {
             // ignore secondary fetch errors
           }
-          const error = new Error(`Open Climate Service job ${jobId} ${detail}`);
+          const error = new Error(`Open Geo Service job ${jobId} ${detail}`);
           await pollTask.fail(error);
           throw error;
         }
 
         const result = { jobId, status };
         await pollTask.succeed(result);
-        await ctx.log("INFO", "Open Climate Service job completed successfully", result);
+        await ctx.log("INFO", "Open Geo Service job completed successfully", result);
         return result;
       }
 
@@ -87,7 +87,7 @@ export const climateOpenEoPoll: StepHandler = {
     }
 
     const timeoutError = new Error(
-      `Open Climate Service job ${jobId} did not complete within ${MAX_ATTEMPTS} attempts (` +
+      `Open Geo Service job ${jobId} did not complete within ${MAX_ATTEMPTS} attempts (` +
         `${(MAX_ATTEMPTS * POLL_INTERVAL_MS) / 60_000} minutes). Last status: "${lastStatus}"`
     );
     await pollTask.fail(timeoutError);

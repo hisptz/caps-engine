@@ -19,7 +19,7 @@ export type SyncPlanQuery = z.infer<typeof syncPlanQuerySchema>;
 export type CreateIngestionBody = z.infer<typeof createIngestionSchema>;
 export type SyncDatasetBody = z.infer<typeof syncDatasetSchema>;
 
-const ocsPipelineDefinitionSchema = z.object({
+const geoservicePipelineDefinitionSchema = z.object({
   name: z.string().nullish(),
   workflow: z.object({
     id: z.string().min(1),
@@ -36,25 +36,25 @@ const ocsPipelineDefinitionSchema = z.object({
     .optional(),
 });
 
-export const ocsPipelineIdParams = z.object({
+export const geoservicePipelineIdParams = z.object({
   id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/),
 });
-export const ocsPipelineModeParams = ocsPipelineIdParams.extend({
+export const geoservicePipelineModeParams = geoservicePipelineIdParams.extend({
   mode: z.enum(["dry_run", "live", "paused"]),
 });
-export const ocsPipelineCreateSchema = ocsPipelineDefinitionSchema.extend({
+export const geoservicePipelineCreateSchema = geoservicePipelineDefinitionSchema.extend({
   id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/, {
     message: "Start with a letter or digit; use only letters, digits, '_' or '-'",
   }),
 });
-export const ocsPipelineChangeSchema = ocsPipelineDefinitionSchema.extend({
+export const geoservicePipelineChangeSchema = geoservicePipelineDefinitionSchema.extend({
   revision: z.number().int().positive(),
 });
-export const ocsPipelineIntervalSchema = z.object({
+export const geoservicePipelineIntervalSchema = z.object({
   start: z.string().min(1),
   end: z.string().min(1),
 });
 
-export type OcsPipelineCreateBody = z.infer<typeof ocsPipelineCreateSchema>;
-export type OcsPipelineChangeBody = z.infer<typeof ocsPipelineChangeSchema>;
-export type OcsPipelineIntervalBody = z.infer<typeof ocsPipelineIntervalSchema>;
+export type GeoservicePipelineCreateBody = z.infer<typeof geoservicePipelineCreateSchema>;
+export type GeoservicePipelineChangeBody = z.infer<typeof geoservicePipelineChangeSchema>;
+export type GeoservicePipelineIntervalBody = z.infer<typeof geoservicePipelineIntervalSchema>;

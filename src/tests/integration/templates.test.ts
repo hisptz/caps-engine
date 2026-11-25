@@ -73,7 +73,7 @@ afterEach(async () => {
 
 function params(overrides: Record<string, unknown> = {}) {
   return {
-    name: `Malawi ${Date.now()}`,
+    name: `Country ${Date.now()}`,
     periodType: "WEEKLY",
     orgUnit: { level: 3 },
     recentPeriods: 12,
@@ -136,7 +136,7 @@ describe("TemplateService.create", () => {
 
     expect(workflow.template).toBe("climate-prediction");
     expect(workflow.pipelines.map((p) => p.name.split(" · ")[0])).toEqual([
-      "Fetch weekly climate data from Open Climate Service",
+      "Fetch weekly climate data from Open Geo Service",
       "Pull Malaria cases from HMIS",
       'Run analytics and the "EWARS weekly" prediction',
     ]);
