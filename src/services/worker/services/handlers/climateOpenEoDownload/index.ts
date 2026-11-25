@@ -28,7 +28,7 @@ export const climateOpenEoDownload: StepHandler = {
       throw new Error("climate-openeo-download requires { jobId } from the previous step's output");
     }
 
-    await ctx.log("INFO", "Downloading Open Climate Service job result", { jobId });
+    await ctx.log("INFO", "Downloading Open Geo Service job result", { jobId });
 
     const downloadTask = await ctx.tasks.startTask("download-result", { jobId });
     let dataValueSet;
@@ -39,7 +39,7 @@ export const climateOpenEoDownload: StepHandler = {
       const parsed = dataValueSetSchema.safeParse(raw);
       if (!parsed.success) {
         throw new Error(
-          `Open Climate Service result is not a valid DataValueSet: ${parsed.error.message}`
+          `Open Geo Service result is not a valid DataValueSet: ${parsed.error.message}`
         );
       }
       dataValueSet = parsed.data;
@@ -71,7 +71,7 @@ export const climateOpenEoDownload: StepHandler = {
       throw error;
     }
 
-    await ctx.log("INFO", "Open Climate Service data download complete", {
+    await ctx.log("INFO", "Open Geo Service data download complete", {
       jobId,
       filename: outputFilename,
       count: dataValueSet.dataValues.length,

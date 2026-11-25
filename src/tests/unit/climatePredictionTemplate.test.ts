@@ -17,7 +17,7 @@ const CASES = "CasesDataE1";
 
 function params(overrides: Record<string, unknown> = {}) {
   return climatePredictionParamsSchema.parse({
-    name: "Malawi",
+    name: "Country",
     periodType: "WEEKLY",
     orgUnit: { level: 3 },
     recentPeriods: 12,
@@ -97,13 +97,13 @@ describe("buildClimatePredictionPlan", () => {
 
     expect(plan.pipelines.map((p) => p.role)).toEqual(["climate"]);
     expect(plan.pipelines[0]!.name).toBe(
-      "Fetch weekly climate data from Open Climate Service · Malawi"
+      "Fetch weekly climate data from Open Geo Service · Country"
     );
     expect(plan.pipelines[0]!.steps[0]!.handlerConfig).toEqual({
       datasetIds: ["era5.precip", "era5.temp"],
     });
     expect(plan.pipelines[0]!.steps.map((s) => s.handlerKey)).toEqual([
-      Handlers.OPEN_CLIMATE_SERVICE_SYNC,
+      Handlers.OPEN_GEO_SERVICE_SYNC,
       Handlers.CLIMATE_OPENEO_CREATE,
       Handlers.CLIMATE_OPENEO_POLL,
       Handlers.CLIMATE_OPENEO_DOWNLOAD,
@@ -134,9 +134,9 @@ describe("buildClimatePredictionPlan", () => {
     );
 
     expect(plan.pipelines.map((p) => p.name)).toEqual([
-      "Fetch weekly climate data from Open Climate Service · Malawi",
-      "Pull data from HMIS · Malawi",
-      'Run analytics and the "EWARS weekly" prediction · Malawi',
+      "Fetch weekly climate data from Open Geo Service · Country",
+      "Pull data from HMIS · Country",
+      'Run analytics and the "EWARS weekly" prediction · Country',
     ]);
     // The setup's org units replace the chosen ones everywhere
     expect(plan.pipelines[0]!.steps[1]!.handlerConfig.orgUnit).toEqual({ ids: setup.orgUnits });
@@ -197,7 +197,7 @@ describe("names and options", () => {
       null,
       { dataElementNames: { [RAIN]: "Rainfall" } }
     );
-    expect(plan.pipelines[0]!.steps[1]!.name).toBe("Request Rainfall from Open Climate Service");
+    expect(plan.pipelines[0]!.steps[1]!.name).toBe("Request Rainfall from Open Geo Service");
   });
 
   it("names steps after the variable's label and describes every step", () => {
@@ -209,11 +209,11 @@ describe("names and options", () => {
     );
     const climate = plan.pipelines[0]!;
     expect(climate.description).toBe(
-      "Fetches the last 12 complete weeks of Rainfall for every org unit at level 3 from Open Climate Service and uploads them to staging."
+      "Fetches the last 12 complete weeks of Rainfall for every org unit at level 3 from Open Geo Service and uploads them to staging."
     );
     expect(climate.steps.map((s) => s.name)).toEqual([
       "Update climate datasets",
-      "Request Rainfall from Open Climate Service",
+      "Request Rainfall from Open Geo Service",
       "Wait for Rainfall to be calculated",
       "Download Rainfall values",
       "Upload Rainfall",
@@ -228,7 +228,7 @@ describe("names and options", () => {
       dataElementNames: { [CASES]: "Malaria cases" },
     });
     expect(plan.pipelines.map((p) => p.name)).toEqual([
-      "Pull Malaria cases from National HMIS · Malawi",
+      "Pull Malaria cases from National HMIS · Country",
     ]);
     expect(plan.pipelines[0]!.steps.map((s) => s.handlerKey)).toEqual([
       Handlers.DHIS2_INSTANCE_PULL,
@@ -247,7 +247,7 @@ describe("names and options", () => {
       setup
     );
     expect(plan.pipelines.map((p) => p.name)).toEqual([
-      'Run the "EWARS weekly" prediction · Malawi',
+      'Run the "EWARS weekly" prediction · Country',
     ]);
     expect(plan.pipelines[0]!.steps.map((s) => s.handlerKey)).toEqual([
       Handlers.PREDICTION_TRIGGER,
@@ -368,7 +368,7 @@ describe("checkClimateDatasets", () => {
       {
         path: "climate.3.datasetId",
         message:
-          'Open Climate Service has no dataset "missing"; ingest it on the Climate data page first',
+          'Open Geo Service has no dataset "missing"; ingest it on the Climate data page first',
       },
     ]);
   });

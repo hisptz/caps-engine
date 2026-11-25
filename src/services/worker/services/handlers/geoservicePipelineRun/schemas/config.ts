@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { capsField } from "@/shared/handlers/fields.ts";
-import { OCS_PIPELINE_ID_PATTERN } from "@/shared/clients/ocsPipelines.ts";
+import { GEOSERVICE_PIPELINE_ID_PATTERN } from "@/shared/clients/geoservicePipelines.ts";
 import { climatePeriodSchema } from "../../climateOpenEo/schemas/config.ts";
 
-export const ocsPipelineRunConfigSchema = z.object({
+export const geoservicePipelineRunConfigSchema = z.object({
   pipelineId: capsField(
-    z.string().regex(OCS_PIPELINE_ID_PATTERN).meta({ title: "OCS pipeline" }),
+    z.string().regex(GEOSERVICE_PIPELINE_ID_PATTERN).meta({ title: "Geoservice pipeline" }),
     "ocsPipeline"
   ),
   period: capsField(climatePeriodSchema.meta({ title: "Period" }), "climatePeriod"),
@@ -15,9 +15,9 @@ export const ocsPipelineRunConfigSchema = z.object({
   }),
 });
 
-export type OcsPipelineRunConfig = z.infer<typeof ocsPipelineRunConfigSchema>;
+export type GeoservicePipelineRunConfig = z.infer<typeof geoservicePipelineRunConfigSchema>;
 
 /** A run or schedule may cover other periods; what it leaves out comes from the step. */
-export const ocsPipelineRunContextSchema = z.object({
+export const geoservicePipelineRunContextSchema = z.object({
   period: climatePeriodSchema.optional(),
 });

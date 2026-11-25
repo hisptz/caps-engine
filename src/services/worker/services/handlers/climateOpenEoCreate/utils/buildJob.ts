@@ -9,7 +9,7 @@ import type { ClimateOpenEoConfig } from "../../climateOpenEo/schemas/config.ts"
 const AGGREGATE_TO_DHIS2_ORG_UNITS = "aggregate_to_dhis2_json";
 
 /**
- * With `exportId`, runs OCS's `aggregate_to_dhis2_json` workflow, whose named export owns the
+ * With `exportId`, runs geoservice's `aggregate_to_dhis2_json` workflow, whose named export owns the
  * data element mapping. With `variable.dataElement`, spells out the same three steps so
  * `save_result` can take the ad-hoc DHIS2JSON options (the workflow only accepts `export`).
  */

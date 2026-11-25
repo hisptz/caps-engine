@@ -52,17 +52,17 @@ export const climateOpenEoConfigSchema = z
   .object({
     datasetId: z.string().min(1),
     /**
-     * Named DHIS2 export declared under `exports` in the Open Climate Service instance
+     * Named DHIS2 export declared under `exports` in the Open Geo Service instance
      * config. It owns the data element mapping and the period type of the dataValueSet.
-     * Same id rule as OCS (`exports/service.py`).
+     * Same id rule as geoservice (`exports/service.py`).
      */
     exportId: z
       .string()
       .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/)
       .optional(),
     /**
-     * Data element the values are written to, mapped in CAPS rather than in OCS config.
-     * Rendered with OCS's ad-hoc `save_result` DHIS2JSON options.
+     * Data element the values are written to, mapped in CAPS rather than in geoservice config.
+     * Rendered with geoservice's ad-hoc `save_result` DHIS2JSON options.
      */
     variable: z
       .object({

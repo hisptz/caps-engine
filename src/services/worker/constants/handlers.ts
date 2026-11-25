@@ -1,5 +1,8 @@
+// Handler keys are stored on pipeline steps and name their queues (`step.<key>`), so the
+// geoservice ones keep their Open Climate Service era values; renaming them would orphan
+// saved steps and queued jobs.
 export enum Handlers {
-  OPEN_CLIMATE_SERVICE_SYNC = "open-climate-service-sync",
+  OPEN_GEO_SERVICE_SYNC = "open-climate-service-sync",
   CLIMATE_OPENEO_CREATE = "climate-openeo-create",
   CLIMATE_OPENEO_POLL = "climate-openeo-poll",
   CLIMATE_OPENEO_DOWNLOAD = "climate-openeo-download",
@@ -15,5 +18,5 @@ export enum Handlers {
   EVENT_DATA_UPLOAD = "event-data-upload",
   DHIS2_NOTIFY = "dhis2-notify",
   DHIS2_DATA_CHECK = "dhis2-data-check",
-  OCS_PIPELINE_RUN = "ocs-pipeline-run",
+  GEOSERVICE_PIPELINE_RUN = "ocs-pipeline-run",
 }

@@ -3,7 +3,7 @@ import { OrgUnitMatch } from "@db/client";
 import { Handlers } from "@/services/worker/constants/handlers.ts";
 import { resolveInstanceMappings } from "@/services/worker/utils/resolveInstanceMappings.ts";
 
-const ROUTE = "caps-src-malawi";
+const ROUTE = "caps-src-country";
 
 function db(instance: unknown) {
   const findUnique = vi.fn().mockResolvedValue(instance);

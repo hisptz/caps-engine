@@ -11,7 +11,7 @@ const WORKFLOW_ID = "33333333-3333-4111-8111-333333333333";
 
 const scheduledWorkflow = {
   id: WORKFLOW_ID,
-  name: "Malawi monthly",
+  name: "Country monthly",
   description: null,
   isActive: true,
   cronExpr: "0 6 1 * *",

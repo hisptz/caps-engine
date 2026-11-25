@@ -106,7 +106,7 @@ export async function getOpenEoJobResults(jobId: string): Promise<OpenEoJobResul
 }
 
 /**
- * The file name of a finished job's data asset. Open Climate Service lists it under the
+ * The file name of a finished job's data asset. Open Geo Service lists it under the
  * `result` asset (a named DHIS2 export is saved as `export-<id>.json`, beside a `manifest`
  * asset); otherwise the first asset with the `data` role.
  */
@@ -117,7 +117,7 @@ export function resolveResultFilename(results: OpenEoJobResults): string {
     assets.find(([, a]) => Array.isArray(a.roles) && a.roles.includes("data")) ??
     [];
   if (!key || !asset) {
-    throw new Error("Open Climate Service job results have no data asset");
+    throw new Error("Open Geo Service job results have no data asset");
   }
   return asset.href ? asset.href.split("/").pop()! : key;
 }

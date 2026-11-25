@@ -68,9 +68,12 @@ describe("ClimateService.listCollections", () => {
   const catalog = {
     type: "Catalog",
     links: [
-      { rel: "self", href: "http://ocs.example/stac/catalog.json" },
-      { rel: "child", href: "http://ocs.example/stac/chirps3_precipitation_daily/collection.json" },
-      { rel: "child", href: "http://ocs.example/stac/collections/era5_land_temperature/" },
+      { rel: "self", href: "http://geoservice.example/stac/catalog.json" },
+      {
+        rel: "child",
+        href: "http://geoservice.example/stac/chirps3_precipitation_daily/collection.json",
+      },
+      { rel: "child", href: "http://geoservice.example/stac/collections/era5_land_temperature/" },
     ],
   };
 

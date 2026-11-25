@@ -8,10 +8,10 @@ vi.mock("@/shared/clients/climateApi.ts", () => ({
 
 import { climateApiClient } from "@/shared/clients/climateApi.ts";
 import {
-  openClimateServiceSync,
-  type OpenClimateServiceSyncOutput,
-} from "@/services/worker/services/handlers/openClimateServiceSync/index.ts";
-import { openClimateServiceSyncConfigSchema } from "@/services/worker/services/handlers/openClimateServiceSync/schemas/config.ts";
+  openGeoServiceSync,
+  type OpenGeoServiceSyncOutput,
+} from "@/services/worker/services/handlers/openGeoServiceSync/index.ts";
+import { openGeoServiceSyncConfigSchema } from "@/services/worker/services/handlers/openGeoServiceSync/schemas/config.ts";
 
 const mockGet = vi.mocked(climateApiClient.get);
 const mockPost = vi.mocked(climateApiClient.post);
@@ -68,7 +68,7 @@ function routeGets(plans: Record<string, unknown>, jobs: Record<string, unknown[
 
 async function run(handlerConfig: Record<string, unknown>) {
   const ctx = buildMockContext({ handlerConfig });
-  const promise = openClimateServiceSync.execute(ctx);
+  const promise = openGeoServiceSync.execute(ctx);
   // Keep the rejection observed while timers advance; the test awaits it afterwards.
   promise.catch(() => undefined);
   await vi.advanceTimersByTimeAsync(60_000);
@@ -89,7 +89,7 @@ describe("open-climate-service-sync handler", () => {
     routeGets({ temp: plan("no_op", { current_end: "2026-08" }) });
 
     const { promise } = await run({ datasetIds: ["temp"], polling });
-    const result = (await promise) as OpenClimateServiceSyncOutput;
+    const result = (await promise) as OpenGeoServiceSyncOutput;
 
     expect(mockPost).not.toHaveBeenCalled();
     expect(result).toMatchObject({ synced: 0, upToDate: 1, failed: 0 });
@@ -108,7 +108,7 @@ describe("open-climate-service-sync handler", () => {
     mockPost.mockResolvedValue(accepted("job_1"));
 
     const { promise } = await run({ datasetIds: ["temp"], end: "2026-08-31", polling });
-    const result = (await promise) as OpenClimateServiceSyncOutput;
+    const result = (await promise) as OpenGeoServiceSyncOutput;
 
     expect(mockPost).toHaveBeenCalledWith(
       "/sync/temp",
@@ -132,7 +132,7 @@ describe("open-climate-service-sync handler", () => {
     mockPost.mockResolvedValue(accepted("job_p"));
 
     const { ctx, promise } = await run({ datasetIds: ["temp", "precip"], polling });
-    const result = (await promise) as OpenClimateServiceSyncOutput;
+    const result = (await promise) as OpenGeoServiceSyncOutput;
 
     expect(vi.mocked(ctx.tasks.startTask).mock.calls.map(([name]) => name)).toEqual([
       "sync:temp",
@@ -164,7 +164,7 @@ describe("open-climate-service-sync handler", () => {
       onFailure: "continue",
       polling,
     });
-    const result = (await promise) as OpenClimateServiceSyncOutput;
+    const result = (await promise) as OpenGeoServiceSyncOutput;
 
     expect(result).toMatchObject({ upToDate: 1, failed: 1 });
     expect(result.datasets[1]).toMatchObject({ datasetId: "precip", outcome: "failed" });
@@ -197,7 +197,7 @@ describe("open-climate-service-sync handler", () => {
     mockPost.mockResolvedValue(accepted("job_1"));
 
     const { promise } = await run({ datasetIds: ["temp"], polling });
-    const result = (await promise) as OpenClimateServiceSyncOutput;
+    const result = (await promise) as OpenGeoServiceSyncOutput;
 
     expect(result.synced).toBe(1);
   });
@@ -208,27 +208,27 @@ describe("open-climate-service-sync handler", () => {
 
     const { promise } = await run({ datasetIds: ["temp"], polling });
 
-    await expect(promise).rejects.toThrow(/keeps running in the Open Climate Service/);
+    await expect(promise).rejects.toThrow(/keeps running in the Open Geo Service/);
   });
 });
 
 describe("open-climate-service-sync config", () => {
   it("defaults to failing on error and to polling under the consumer timeout", () => {
-    const config = openClimateServiceSyncConfigSchema.parse({ datasetIds: ["temp"] });
+    const config = openGeoServiceSyncConfigSchema.parse({ datasetIds: ["temp"] });
     expect(config.onFailure).toBe("fail");
     expect(config.polling.pollIntervalMs * config.polling.maxAttempts).toBeLessThan(30 * 60_000);
   });
 
   it("rejects an empty or duplicated dataset list", () => {
-    expect(openClimateServiceSyncConfigSchema.safeParse({ datasetIds: [] }).success).toBe(false);
-    expect(
-      openClimateServiceSyncConfigSchema.safeParse({ datasetIds: ["temp", "temp"] }).success
-    ).toBe(false);
+    expect(openGeoServiceSyncConfigSchema.safeParse({ datasetIds: [] }).success).toBe(false);
+    expect(openGeoServiceSyncConfigSchema.safeParse({ datasetIds: ["temp", "temp"] }).success).toBe(
+      false
+    );
   });
 
   it("accepts only a real YYYY-MM-DD end date", () => {
     const parse = (end: string) =>
-      openClimateServiceSyncConfigSchema.safeParse({ datasetIds: ["temp"], end }).success;
+      openGeoServiceSyncConfigSchema.safeParse({ datasetIds: ["temp"], end }).success;
     expect(parse("2026-08-31")).toBe(true);
     expect(parse("2026-08")).toBe(false);
     expect(parse("2026-13-01")).toBe(false);

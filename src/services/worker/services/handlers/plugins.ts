@@ -1,5 +1,5 @@
 import type { HandlerPlugin } from "@/shared/handlers/plugin.ts";
-import openClimateServiceSync from "./openClimateServiceSync/plugin.ts";
+import openGeoServiceSync from "./openGeoServiceSync/plugin.ts";
 import climateOpenEoCreate from "./climateOpenEoCreate/plugin.ts";
 import climateOpenEoPoll from "./climateOpenEoPoll/plugin.ts";
 import climateOpenEoDownload from "./climateOpenEoDownload/plugin.ts";
@@ -15,14 +15,14 @@ import thresholdGeneration from "./thresholdGeneration/plugin.ts";
 import alertGeneration from "./alertGeneration/plugin.ts";
 import eventDataUpload from "./eventDataUpload/plugin.ts";
 import dhis2Notify from "./dhis2Notify/plugin.ts";
-import ocsPipelineRun from "./ocsPipelineRun/plugin.ts";
+import geoservicePipelineRun from "./geoservicePipelineRun/plugin.ts";
 
 export const BUILT_IN_PLUGINS: HandlerPlugin[] = [
-  openClimateServiceSync,
+  openGeoServiceSync,
   climateOpenEoCreate,
   climateOpenEoPoll,
   climateOpenEoDownload,
-  ocsPipelineRun,
+  geoservicePipelineRun,
   predictionTrigger,
   predictionPoll,
   predictionDataDownload,

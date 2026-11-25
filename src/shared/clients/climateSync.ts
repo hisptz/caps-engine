@@ -78,7 +78,7 @@ function describeClimateError(action: string, datasetId: string, err: unknown): 
         : JSON.stringify(data);
     const hint =
       status === 404
-        ? " — the dataset no longer exists in the Open Climate Service"
+        ? " — the dataset no longer exists in the Open Geo Service"
         : status === 409
           ? " — a sync for this dataset is probably already running; retry once it finishes"
           : "";

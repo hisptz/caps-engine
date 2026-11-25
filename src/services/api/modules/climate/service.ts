@@ -31,8 +31,8 @@ function stacCollectionPath(id: string): string {
 }
 
 /**
- * Child links point at `.../stac/{id}/collection.json` (OCS static layout). The older
- * `.../stac/collections/{id}` form is still accepted so a not-yet-updated OCS keeps working.
+ * Child links point at `.../stac/{id}/collection.json` (geoservice static layout). The older
+ * `.../stac/collections/{id}` form is still accepted so a not-yet-updated geoservice keeps working.
  */
 function collectionIdFromHref(href: string): string | null {
   const segments = (href.split(/[?#]/)[0] ?? "").replace(/\/+$/, "").split("/");

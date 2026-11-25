@@ -7,8 +7,8 @@ import {
 
 export default definePlugin({
   key: Handlers.CLIMATE_OPENEO_CREATE,
-  displayName: "Open Climate Service Create",
-  description: "Create and start an Open Climate Service batch job for climate data aggregation",
+  displayName: "Open Geo Service Create",
+  description: "Create and start an Open Geo Service batch job for climate data aggregation",
   tags: ["climate", "openeo"],
   outputs: { fields: [] },
   schemas: {

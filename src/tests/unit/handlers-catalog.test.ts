@@ -43,15 +43,15 @@ describe("handler catalog", () => {
       ].sort()
     );
     const climateCreate = handlers.find((h) => h.key === "climate-openeo-create");
-    expect(climateCreate?.displayName).toBe("Open Climate Service Create");
+    expect(climateCreate?.displayName).toBe("Open Geo Service Create");
     expect(climateCreate?.queueName).toBe("step.climate-openeo-create");
     expect(climateCreate?.schemas?.config).toBeDefined();
     expect(climateCreate?.schemas?.context).toBeDefined();
     const climatePoll = handlers.find((h) => h.key === "climate-openeo-poll");
-    expect(climatePoll?.displayName).toBe("Open Climate Service Poll");
+    expect(climatePoll?.displayName).toBe("Open Geo Service Poll");
     expect(climatePoll?.queueName).toBe("step.climate-openeo-poll");
     const climateDownload = handlers.find((h) => h.key === "climate-openeo-download");
-    expect(climateDownload?.displayName).toBe("Open Climate Service Download");
+    expect(climateDownload?.displayName).toBe("Open Geo Service Download");
     expect(climateDownload?.queueName).toBe("step.climate-openeo-download");
   });
 

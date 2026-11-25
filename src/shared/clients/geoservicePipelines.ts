@@ -2,30 +2,30 @@ import { climateApiClient } from "@/shared/clients/climateApi.ts";
 
 const JSON_HEADERS = { Accept: "application/json", "Content-Type": "application/json" };
 
-/** The id rule OCS holds pipeline (and export) ids to. */
-export const OCS_PIPELINE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+/** The id rule geoservice holds pipeline (and export) ids to. */
+export const GEOSERVICE_PIPELINE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
-export type OcsDeliveryMode = "dry_run" | "live" | "paused";
-export type OcsDeliveryPolicy = "on_update" | "manual";
-export type OcsRunMode = "dry_run" | "live";
+export type GeoserviceDeliveryMode = "dry_run" | "live" | "paused";
+export type GeoserviceDeliveryPolicy = "on_update" | "manual";
+export type GeoserviceRunMode = "dry_run" | "live";
 
-export type OcsPipelineDefinition = {
+export type GeoservicePipelineDefinition = {
   name?: string | null;
   workflow: { id: string; arguments: Record<string, unknown> };
   destination: { plugin: string; settings: Record<string, unknown> };
-  delivery: { mode: OcsDeliveryMode; policy: OcsDeliveryPolicy };
+  delivery: { mode: GeoserviceDeliveryMode; policy: GeoserviceDeliveryPolicy };
 };
 
-export type OcsPipelineSpec = OcsPipelineDefinition & { id: string };
+export type GeoservicePipelineSpec = GeoservicePipelineDefinition & { id: string };
 
-export type OcsValidation = {
+export type GeoserviceValidation = {
   valid: boolean;
   checked_at: string;
   checks: Array<{ id: string; status: "pass" | "fail" | "skip"; message: string }>;
 };
 
 /** Run states; `succeeded`, `needs_attention`, `failed` and `canceled` are final. */
-export type OcsRunStatus =
+export type GeoserviceRunStatus =
   | "submitting"
   | "queued"
   | "running"
@@ -36,18 +36,18 @@ export type OcsRunStatus =
   | "failed"
   | "canceled";
 
-export const FINAL_OCS_RUN_STATUSES: ReadonlySet<OcsRunStatus> = new Set([
+export const FINAL_GEOSERVICE_RUN_STATUSES: ReadonlySet<GeoserviceRunStatus> = new Set([
   "succeeded",
   "needs_attention",
   "failed",
   "canceled",
 ]);
 
-export type OcsPipelineRun = {
+export type GeoservicePipelineRun = {
   run_id: string;
-  status: OcsRunStatus;
+  status: GeoserviceRunStatus;
   failure?: { stage: "submission" | "job" | "delivery"; message: string } | null;
-  mode: OcsRunMode;
+  mode: GeoserviceRunMode;
   start: string;
   end: string;
   job_status?: string;
@@ -60,7 +60,7 @@ export type OcsPipelineRun = {
 };
 
 /** A dry run: what was rendered and the destination's verdict on it. */
-export type OcsDryRun = {
+export type GeoserviceDryRun = {
   ran_at: string;
   start: string;
   end: string;
@@ -72,16 +72,16 @@ export type OcsDryRun = {
   error?: string | null;
 };
 
-export type OcsPipeline = {
-  spec: OcsPipelineSpec;
+export type GeoservicePipeline = {
+  spec: GeoservicePipelineSpec;
   revision: number;
   created_at: string;
   updated_at?: string | null;
   /** Whether the current bindings passed a dry run, which going live needs. */
   approved: boolean;
-  validation?: OcsValidation | null;
-  dry_run?: OcsDryRun | null;
-  trigger: { policy: OcsDeliveryPolicy; datasets: string[] };
+  validation?: GeoserviceValidation | null;
+  dry_run?: GeoserviceDryRun | null;
+  trigger: { policy: GeoserviceDeliveryPolicy; datasets: string[] };
   inputs: Array<{ kind: "dataset" | "features"; id: string; name: string; parameter: string }>;
   workflow: { id: string; title: string; arguments: Record<string, unknown> };
   destination: {
@@ -89,10 +89,10 @@ export type OcsPipeline = {
     title: string;
     settings: Array<{ name: string; title: string; value?: unknown; label?: string | null }>;
   };
-  latest_run?: OcsPipelineRun | null;
+  latest_run?: GeoservicePipelineRun | null;
 };
 
-export type OcsWorkflowParameter = {
+export type GeoserviceWorkflowParameter = {
   name: string;
   description?: string;
   schema?: Record<string, unknown>;
@@ -100,65 +100,71 @@ export type OcsWorkflowParameter = {
   optional?: boolean;
 };
 
-export type OcsWorkflow = {
+export type GeoserviceWorkflow = {
   id: string;
   summary?: string | null;
   description?: string | null;
-  parameters: OcsWorkflowParameter[];
+  parameters: GeoserviceWorkflowParameter[];
   process_graph: Record<string, unknown>;
 };
 
 const path = (pipelineId: string) => `/pipelines/${encodeURIComponent(pipelineId)}`;
 
-export async function listOcsPipelines(): Promise<OcsPipeline[]> {
-  const { data } = await climateApiClient.get<{ items: OcsPipeline[] }>("/pipelines", {
+export async function listGeoservicePipelines(): Promise<GeoservicePipeline[]> {
+  const { data } = await climateApiClient.get<{ items: GeoservicePipeline[] }>("/pipelines", {
     headers: JSON_HEADERS,
   });
   return data.items ?? [];
 }
 
-export async function getOcsPipeline(pipelineId: string): Promise<OcsPipeline> {
-  const { data } = await climateApiClient.get<OcsPipeline>(path(pipelineId), {
+export async function getGeoservicePipeline(pipelineId: string): Promise<GeoservicePipeline> {
+  const { data } = await climateApiClient.get<GeoservicePipeline>(path(pipelineId), {
     headers: JSON_HEADERS,
   });
   return data;
 }
 
-/** Validated by OCS first: a failing check is refused with 422 and the checks under `detail`. */
-export async function createOcsPipeline(spec: OcsPipelineSpec): Promise<OcsPipeline> {
-  const { data } = await climateApiClient.post<OcsPipeline>("/pipelines", spec, {
+/** Validated by geoservice first: a failing check is refused with 422 and the checks under `detail`. */
+export async function createGeoservicePipeline(
+  spec: GeoservicePipelineSpec
+): Promise<GeoservicePipeline> {
+  const { data } = await climateApiClient.post<GeoservicePipeline>("/pipelines", spec, {
     headers: JSON_HEADERS,
   });
   return data;
 }
 
 /** `revision` is the one the change was based on; a stale one is refused with 409. */
-export async function updateOcsPipeline(
+export async function updateGeoservicePipeline(
   pipelineId: string,
-  change: OcsPipelineDefinition & { revision: number }
-): Promise<OcsPipeline> {
-  const { data } = await climateApiClient.put<OcsPipeline>(path(pipelineId), change, {
+  change: GeoservicePipelineDefinition & { revision: number }
+): Promise<GeoservicePipeline> {
+  const { data } = await climateApiClient.put<GeoservicePipeline>(path(pipelineId), change, {
     headers: JSON_HEADERS,
   });
   return data;
 }
 
 /** Renders one interval and has the destination judge it without writing; going live needs a passed one. */
-export async function dryRunOcsPipeline(
+export async function dryRunGeoservicePipeline(
   pipelineId: string,
   interval: { start: string; end: string }
-): Promise<OcsDryRun> {
-  const { data } = await climateApiClient.post<OcsDryRun>(`${path(pipelineId)}/dry-run`, interval, {
-    headers: JSON_HEADERS,
-  });
+): Promise<GeoserviceDryRun> {
+  const { data } = await climateApiClient.post<GeoserviceDryRun>(
+    `${path(pipelineId)}/dry-run`,
+    interval,
+    {
+      headers: JSON_HEADERS,
+    }
+  );
   return data;
 }
 
-export async function setOcsPipelineMode(
+export async function setGeoservicePipelineMode(
   pipelineId: string,
-  mode: OcsDeliveryMode
-): Promise<OcsPipeline> {
-  const { data } = await climateApiClient.post<OcsPipeline>(
+  mode: GeoserviceDeliveryMode
+): Promise<GeoservicePipeline> {
+  const { data } = await climateApiClient.post<GeoservicePipeline>(
     `${path(pipelineId)}/mode/${mode}`,
     {},
     { headers: JSON_HEADERS }
@@ -166,12 +172,12 @@ export async function setOcsPipelineMode(
   return data;
 }
 
-/** Starts one run over an explicit interval; OCS answers 202 with the run to poll. */
-export async function startOcsPipelineRun(
+/** Starts one run over an explicit interval; geoservice answers 202 with the run to poll. */
+export async function startGeoservicePipelineRun(
   pipelineId: string,
-  request: { start: string; end: string; mode: OcsRunMode }
-): Promise<OcsPipelineRun> {
-  const { data } = await climateApiClient.post<OcsPipelineRun>(
+  request: { start: string; end: string; mode: GeoserviceRunMode }
+): Promise<GeoservicePipelineRun> {
+  const { data } = await climateApiClient.post<GeoservicePipelineRun>(
     `${path(pipelineId)}/runs`,
     request,
     {
@@ -181,25 +187,28 @@ export async function startOcsPipelineRun(
   return data;
 }
 
-export async function getOcsPipelineRun(
+export async function getGeoservicePipelineRun(
   pipelineId: string,
   runId: string
-): Promise<OcsPipelineRun> {
-  const { data } = await climateApiClient.get<OcsPipelineRun>(
+): Promise<GeoservicePipelineRun> {
+  const { data } = await climateApiClient.get<GeoservicePipelineRun>(
     `${path(pipelineId)}/runs/${encodeURIComponent(runId)}`,
     { headers: JSON_HEADERS }
   );
   return data;
 }
 
-export async function listOcsWorkflows(): Promise<OcsWorkflow[]> {
-  const { data } = await climateApiClient.get<{ processes?: OcsWorkflow[] }>("/process_graphs", {
-    headers: JSON_HEADERS,
-  });
+export async function listGeoserviceWorkflows(): Promise<GeoserviceWorkflow[]> {
+  const { data } = await climateApiClient.get<{ processes?: GeoserviceWorkflow[] }>(
+    "/process_graphs",
+    {
+      headers: JSON_HEADERS,
+    }
+  );
   return data.processes ?? [];
 }
 
-export async function listOcsFeatureCollections(): Promise<
+export async function listGeoserviceFeatureCollections(): Promise<
   Array<{
     id: string;
     name?: string | null;
@@ -218,7 +227,7 @@ export async function listOcsFeatureCollections(): Promise<
   return data.items ?? [];
 }
 
-export async function listOcsDatasets(): Promise<Array<Record<string, unknown>>> {
+export async function listGeoserviceDatasets(): Promise<Array<Record<string, unknown>>> {
   const { data } = await climateApiClient.get<{ items?: Array<Record<string, unknown>> }>(
     "/datasets",
     {
@@ -229,31 +238,31 @@ export async function listOcsDatasets(): Promise<Array<Record<string, unknown>>>
 }
 
 /**
- * A dataset's period type (`daily`, `monthly`, ...) as OCS lists it, or null when OCS does not
- * list the dataset. A pipeline delivers values at this period type: OCS does not resample in time.
+ * A dataset's period type (`daily`, `monthly`, ...) as geoservice lists it, or null when geoservice does not
+ * list the dataset. A pipeline delivers values at this period type: geoservice does not resample in time.
  */
-export async function getOcsDatasetPeriodType(datasetId: string): Promise<string | null> {
-  const item = (await listOcsDatasets()).find((dataset) => dataset.dataset_id === datasetId);
+export async function getGeoserviceDatasetPeriodType(datasetId: string): Promise<string | null> {
+  const item = (await listGeoserviceDatasets()).find((dataset) => dataset.dataset_id === datasetId);
   return typeof item?.period_type === "string" ? item.period_type.toLowerCase() : null;
 }
 
-// --- workflow parameters, as OCS reads them (open_geo_service/pipelines/workflow.py) ---
+// --- workflow parameters, as geoservice reads them (open_geo_service/pipelines/workflow.py) ---
 
 const TEMPORAL_INTERVAL = "temporal-interval";
 
-export function parameterSchema(parameter: OcsWorkflowParameter): Record<string, unknown> {
+export function parameterSchema(parameter: GeoserviceWorkflowParameter): Record<string, unknown> {
   return parameter.schema && typeof parameter.schema === "object" ? parameter.schema : {};
 }
 
 /** The parameters each run fills with its own interval; a pipeline never binds them. */
-export function intervalParameters(workflow: OcsWorkflow): string[] {
+export function intervalParameters(workflow: GeoserviceWorkflow): string[] {
   return workflow.parameters
     .filter((p) => typeof p.name === "string" && parameterSchema(p).subtype === TEMPORAL_INTERVAL)
     .map((p) => p.name);
 }
 
 /** Whether a pipeline can run the workflow: it takes an interval and does not save its own result. */
-export function isPipelineReady(workflow: OcsWorkflow): boolean {
+export function isPipelineReady(workflow: GeoserviceWorkflow): boolean {
   const nodes = Object.values(workflow.process_graph ?? {});
   const savesOwnResult = nodes.some(
     (node) =>

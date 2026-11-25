@@ -47,7 +47,7 @@ describe("climateOpenEoConfigSchema", () => {
     expect(climateOpenEoConfigSchema.safeParse(cfg).success).toBe(false);
   });
 
-  it("fails for an export id OCS would not accept", () => {
+  it("fails for an export id geoservice would not accept", () => {
     expect(
       climateOpenEoConfigSchema.safeParse(baseConfig({ exportId: "rainfall monthly" })).success
     ).toBe(false);

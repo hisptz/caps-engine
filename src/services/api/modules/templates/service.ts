@@ -47,7 +47,7 @@ export type TemplateLookups = {
   routeReachable(routeCode: string): Promise<boolean>;
   /** Staging data elements the instance's pull mappings fill */
   pulledFromInstance(routeCode: string): Promise<Set<string>>;
-  /** Datasets Open Climate Service has ingested; null when OCS could not be reached */
+  /** Datasets Open Geo Service has ingested; null when geoservice could not be reached */
   climateDatasets(): Promise<ClimateDataset[] | null>;
   /** The connected instance's name for pipeline names; null when it cannot be read */
   instanceName(routeCode: string): Promise<string | null>;
@@ -60,7 +60,7 @@ type StacCollection = {
 
 const STEP_PERIOD_TYPES: Record<string, string> = { P1D: "daily", P7D: "weekly", P1M: "monthly" };
 
-/** What the workflow can fetch: datasets OCS has ingested, with their time step. */
+/** What the workflow can fetch: datasets geoservice has ingested, with their time step. */
 function climateDatasetOf(collection: StacCollection): ClimateDataset {
   const time = Object.values(collection["cube:dimensions"] ?? {}).find(
     (d) => d.type === "temporal"
@@ -287,7 +287,7 @@ export class TemplateService {
     if (datasets === null) {
       warnings.push({
         path: "climate",
-        message: "Could not reach Open Climate Service to check the datasets",
+        message: "Could not reach Open Geo Service to check the datasets",
       });
     } else {
       errors.push(...checkClimateDatasets(params, datasets));
