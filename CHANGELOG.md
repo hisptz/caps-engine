@@ -1,3 +1,9 @@
+## [3.4.2](https://github.com/hisptz/caps-engine/compare/v3.4.1...v3.4.2) (2026-11-25)
+
+### Bug Fixes
+
+- rename ocs to geoservice ([a315a0d](https://github.com/hisptz/caps-engine/commit/a315a0dbf7ade182d2a698a2af4392bf15ad41c4))
+
 ## [3.4.1](https://github.com/hisptz/caps-engine/compare/v3.4.0...v3.4.1) (2026-11-21)
 
 ### Bug Fixes
